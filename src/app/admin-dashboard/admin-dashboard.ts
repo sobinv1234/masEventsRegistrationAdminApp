@@ -17,6 +17,13 @@ type AgeFilter = 'all' | '8-13' | '14-17' | '18-plus';
 type GameFilter = 'all' | RegistrationRecord['games'][number]['game'];
 type EmailFilter = 'all' | 'sent' | 'pending';
 type PageSize = 10 | 25 | 50;
+type ClearSchedule = { requestedAt: string; scheduledFor: string };
+type ConfirmationDialog = {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  action: 'delete-registration' | 'schedule-clear';
+};
 
 @Component({
   selector: 'app-admin-dashboard',
@@ -40,6 +47,9 @@ export class AdminDashboard {
   protected errorMessage = '';
   protected pendingDeleteId: string | null = null;
   protected deletingId: string | null = null;
+  protected clearSchedule: ClearSchedule | null = null;
+  protected confirmationDialog: ConfirmationDialog | null = null;
+  protected clearActionLoading = false;
   private authorization = '';
 
   protected get filteredRecords(): RegistrationRecord[] {
@@ -106,10 +116,103 @@ export class AdminDashboard {
 
   protected requestDelete(record: RegistrationRecord): void {
     this.pendingDeleteId = record.id;
+    this.confirmationDialog = {
+      title: 'Delete registration?',
+      message: `Delete the registration for ${record.name}? This action cannot be undone.`,
+      confirmLabel: 'Delete registration',
+      action: 'delete-registration',
+    };
   }
 
-  protected cancelDelete(): void {
+  protected cancelConfirmation(): void {
     this.pendingDeleteId = null;
+    this.confirmationDialog = null;
+  }
+
+  protected requestClearAll(): void {
+    if (this.clearSchedule || this.clearActionLoading) {
+      return;
+    }
+    this.confirmationDialog = {
+      title: 'Schedule clear all data?',
+      message:
+        'All registrations already in the dashboard will be permanently deleted in 10 days. Registrations submitted after scheduling will be kept. You can cancel the scheduled clear before it runs.',
+      confirmLabel: 'Schedule clear',
+      action: 'schedule-clear',
+    };
+  }
+
+  protected async confirmDialogAction(): Promise<void> {
+    const dialog = this.confirmationDialog;
+    this.confirmationDialog = null;
+    if (!dialog) {
+      return;
+    }
+
+    if (dialog.action === 'schedule-clear') {
+      await this.scheduleClearAll();
+      return;
+    }
+
+    const record = this.records.find((item) => item.id === this.pendingDeleteId);
+    if (record) {
+      await this.deleteRegistration(record);
+    }
+  }
+
+  protected async scheduleClearAll(): Promise<void> {
+    this.errorMessage = '';
+    this.clearActionLoading = true;
+    try {
+      const response = await fetch('/api/admin/registrations/clear-schedule', {
+        method: 'POST',
+        headers: { Authorization: this.authorization },
+      });
+      if (!response.ok) {
+        throw new Error(
+          await this.getApiError(response, 'Could not schedule the data clear.'),
+        );
+      }
+      const result: { schedule: ClearSchedule } = await response.json();
+      this.clearSchedule = result.schedule;
+    } catch (error) {
+      this.errorMessage =
+        error instanceof TypeError
+          ? 'Could not reach the dashboard service. Please try again.'
+          : error instanceof Error
+            ? error.message
+            : 'Could not schedule the data clear.';
+    } finally {
+      this.clearActionLoading = false;
+      this.changeDetector.markForCheck();
+    }
+  }
+
+  protected async cancelScheduledClear(): Promise<void> {
+    this.errorMessage = '';
+    this.clearActionLoading = true;
+    try {
+      const response = await fetch('/api/admin/registrations/clear-schedule', {
+        method: 'DELETE',
+        headers: { Authorization: this.authorization },
+      });
+      if (!response.ok) {
+        throw new Error(
+          await this.getApiError(response, 'Could not cancel the scheduled clear.'),
+        );
+      }
+      this.clearSchedule = null;
+    } catch (error) {
+      this.errorMessage =
+        error instanceof TypeError
+          ? 'Could not reach the dashboard service. Please try again.'
+          : error instanceof Error
+            ? error.message
+            : 'Could not cancel the scheduled clear.';
+    } finally {
+      this.clearActionLoading = false;
+      this.changeDetector.markForCheck();
+    }
   }
 
   protected async deleteRegistration(record: RegistrationRecord): Promise<void> {
@@ -173,6 +276,7 @@ export class AdminDashboard {
         throw new Error(await this.getApiError(response, 'Could not sign in.'));
       }
       this.records = await response.json();
+      await this.loadClearSchedule();
       this.loggedIn = true;
       this.password = '';
       this.changeDetector.markForCheck();
@@ -205,6 +309,7 @@ export class AdminDashboard {
         );
       }
       this.records = await response.json();
+      await this.loadClearSchedule();
       this.changeDetector.markForCheck();
     } catch (error) {
       this.errorMessage =
@@ -251,7 +356,23 @@ export class AdminDashboard {
     this.records = [];
     this.pendingDeleteId = null;
     this.deletingId = null;
+    this.clearSchedule = null;
+    this.confirmationDialog = null;
     this.loggedIn = false;
+  }
+
+  private async loadClearSchedule(): Promise<void> {
+    const response = await fetch('/api/admin/registrations/clear-schedule', {
+      headers: { Authorization: this.authorization },
+      cache: 'no-store',
+    });
+    if (!response.ok) {
+      throw new Error(
+        await this.getApiError(response, 'Could not load scheduled clear status.'),
+      );
+    }
+    const result: { schedule: ClearSchedule | null } = await response.json();
+    this.clearSchedule = result.schedule;
   }
 
   private async getApiError(response: Response, fallback: string): Promise<string> {

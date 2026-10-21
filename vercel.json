@@ -13,6 +13,18 @@
     },
     "api/admin/registrations/[id]/email.mjs": {
       "includeFiles": "dist/mas/**"
-    }
+    },
+    "api/admin/registrations/clear-schedule.mjs": {
+      "includeFiles": "dist/mas/**"
+    },
+    "api/cron/clear-registrations.mjs": {
+      "includeFiles": "dist/mas/**"
+    },
+    "crons": [
+      {
+        "path": "/api/cron/clear-registrations",
+        "schedule": "0 3 * * *"
+      }
+    ]
   }
 }

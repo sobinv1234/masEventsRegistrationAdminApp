@@ -12,7 +12,17 @@
           <button type="button" class="secondary" [disabled]="loading" (click)="refresh()">
             {{ loading ? 'Loading…' : 'Refresh' }}
           </button>
+          <div>
+          <button
+            type="button"
+            class="clear-data-button"
+            [disabled]="clearActionLoading || clearSchedule !== null"
+            (click)="requestClearAll()"
+          >
+            Clear all data
+          </button>
           <button type="button" class="secondary" (click)="signOut()">Sign out</button>
+        </div>
         </div>
         </div>
       }
@@ -54,6 +64,28 @@
       </form>
     } @else {
       <section class="records" aria-live="polite">
+        @if (clearSchedule) {
+          <section class="scheduled-clear" role="status">
+            <div>
+              <strong>A clear is scheduled</strong>
+              <p>
+                Registrations submitted on or before
+                {{ formatDate(clearSchedule.requestedAt) }} will be permanently
+                removed on or after {{ formatDate(clearSchedule.scheduledFor) }}.
+                Later registrations will be kept. The daily cleanup may run up
+                to 24 hours after that time.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="cancel-scheduled-clear"
+              [disabled]="clearActionLoading"
+              (click)="cancelScheduledClear()"
+            >
+              {{ clearActionLoading ? 'Please wait…' : 'Cancel scheduled clear' }}
+            </button>
+          </section>
+        }
         <div class="records-heading">
           <div>
             <h2>Participants</h2>
@@ -189,39 +221,15 @@
                       }
                     </td>
                     <td>
-                      @if (pendingDeleteId === record.id) {
-                        <span class="delete-confirmation">
-                          Delete this registration?
-                        </span>
-                        <div class="row-actions">
-                          <button
-                            type="button"
-                            class="delete-button"
-                            [disabled]="deletingId !== null"
-                            (click)="deleteRegistration(record)"
-                          >
-                            {{ deletingId === record.id ? 'Deleting…' : 'Confirm delete' }}
-                          </button>
-                          <button
-                            type="button"
-                            class="cancel-delete-button"
-                            [disabled]="deletingId !== null"
-                            (click)="cancelDelete()"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      } @else {
-                        <button
-                          type="button"
-                          class="delete-button"
-                          [disabled]="deletingId !== null"
-                          (click)="requestDelete(record)"
-                          [attr.aria-label]="'Delete registration for ' + record.name"
-                        >
-                          Delete
-                        </button>
-                      }
+                      <button
+                        type="button"
+                        class="delete-button"
+                        [disabled]="deletingId !== null"
+                        (click)="requestDelete(record)"
+                        [attr.aria-label]="'Delete registration for ' + record.name"
+                      >
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 }
@@ -271,3 +279,35 @@
     }
   </section>
 </main>
+
+@if (confirmationDialog) {
+  <div class="confirmation-backdrop">
+    <section
+      class="confirmation-dialog"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="confirmation-title"
+      aria-describedby="confirmation-message"
+    >
+      <h2 id="confirmation-title">{{ confirmationDialog.title }}</h2>
+      <p id="confirmation-message">{{ confirmationDialog.message }}</p>
+      <div class="confirmation-actions">
+        <button type="button" class="cancel-delete-button" (click)="cancelConfirmation()">
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="delete-button"
+          [disabled]="clearActionLoading || deletingId !== null"
+          (click)="confirmDialogAction()"
+        >
+          {{
+            clearActionLoading || deletingId !== null
+              ? 'Please wait…'
+              : confirmationDialog.confirmLabel
+          }}
+        </button>
+      </div>
+    </section>
+  </div>
+}

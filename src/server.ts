@@ -38,6 +38,10 @@ type Registration = {
 type RegistrationInput = Omit<Registration, 'id' | 'createdAt' | 'games' | 'emailSent'> & {
   games: Game[];
 };
+type RegistrationClearSchedule = {
+  requestedAt: string;
+  scheduledFor: string;
+};
 
 const app = express();
 const angularApp = new AngularNodeAppEngine();
@@ -69,6 +73,11 @@ function getSqliteDatabase(): SqliteDatabase {
       created_at TEXT NOT NULL,
       registration_data TEXT NOT NULL,
       email_sent INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS registration_clear_schedule (
+      schedule_key TEXT PRIMARY KEY,
+      requested_at TEXT NOT NULL,
+      scheduled_for TEXT NOT NULL
     )
   `);
   chmodSync(databasePath, 0o600);
@@ -92,6 +101,13 @@ async function ensureNeonSchema(): Promise<void> {
       registration_data TEXT NOT NULL,
       email_sent BOOLEAN NOT NULL DEFAULT FALSE
     )`
+      .then(() =>
+        getNeonSql()`CREATE TABLE IF NOT EXISTS registration_clear_schedule (
+          schedule_key TEXT PRIMARY KEY,
+          requested_at TEXT NOT NULL,
+          scheduled_for TEXT NOT NULL
+        )`,
+      )
       .then(() => undefined)
       .catch((error: unknown) => {
         neonSchemaReady = undefined;
@@ -213,6 +229,140 @@ async function removeRegistration(registrationId: string): Promise<boolean> {
     .prepare('DELETE FROM registrations WHERE id = ?')
     .run(registrationId);
   return result.changes > 0;
+}
+
+async function getRegistrationClearSchedule(): Promise<RegistrationClearSchedule | null> {
+  if (process.env['DATABASE_URL']) {
+    await ensureNeonSchema();
+    const rows = await getNeonSql()`SELECT requested_at, scheduled_for
+      FROM registration_clear_schedule
+      WHERE schedule_key = 'all'
+      LIMIT 1`;
+    const row = rows[0];
+    return row
+      ? {
+          requestedAt: String(row['requested_at']),
+          scheduledFor: String(row['scheduled_for']),
+        }
+      : null;
+  }
+
+  const row = getSqliteDatabase()
+    .prepare(
+      `SELECT requested_at, scheduled_for
+       FROM registration_clear_schedule
+       WHERE schedule_key = ?`,
+    )
+    .get('all');
+  return row
+    ? {
+        requestedAt: String(row['requested_at']),
+        scheduledFor: String(row['scheduled_for']),
+      }
+    : null;
+}
+
+async function scheduleRegistrationClear(): Promise<RegistrationClearSchedule | null> {
+  const requestedAt = new Date();
+  const schedule: RegistrationClearSchedule = {
+    requestedAt: requestedAt.toISOString(),
+    scheduledFor: new Date(requestedAt.getTime() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+  };
+
+  if (process.env['DATABASE_URL']) {
+    await ensureNeonSchema();
+    const rows = await getNeonSql()`INSERT INTO registration_clear_schedule
+      (schedule_key, requested_at, scheduled_for)
+      VALUES ('all', ${schedule.requestedAt}, ${schedule.scheduledFor})
+      ON CONFLICT (schedule_key) DO NOTHING
+      RETURNING requested_at, scheduled_for`;
+    const row = rows[0];
+    return row
+      ? {
+          requestedAt: String(row['requested_at']),
+          scheduledFor: String(row['scheduled_for']),
+        }
+      : null;
+  }
+
+  const result = getSqliteDatabase()
+    .prepare(
+      `INSERT OR IGNORE INTO registration_clear_schedule
+        (schedule_key, requested_at, scheduled_for)
+       VALUES (?, ?, ?)`,
+    )
+    .run('all', schedule.requestedAt, schedule.scheduledFor);
+  return result.changes > 0 ? schedule : null;
+}
+
+async function cancelRegistrationClear(): Promise<boolean> {
+  if (process.env['DATABASE_URL']) {
+    await ensureNeonSchema();
+    const rows = await getNeonSql()`DELETE FROM registration_clear_schedule
+      WHERE schedule_key = 'all'
+      RETURNING schedule_key`;
+    return rows.length > 0;
+  }
+
+  const result = getSqliteDatabase()
+    .prepare('DELETE FROM registration_clear_schedule WHERE schedule_key = ?')
+    .run('all');
+  return result.changes > 0;
+}
+
+async function clearRegistrationsIfDue(): Promise<number> {
+  const now = new Date().toISOString();
+  if (process.env['DATABASE_URL']) {
+    await ensureNeonSchema();
+    const rows = await getNeonSql()`WITH due_schedule AS MATERIALIZED (
+        SELECT schedule_key, requested_at
+        FROM registration_clear_schedule
+        WHERE schedule_key = 'all' AND scheduled_for <= ${now}
+        FOR UPDATE
+      ),
+      deleted AS (
+        DELETE FROM registrations
+        USING due_schedule
+        WHERE registrations.created_at <= due_schedule.requested_at
+        RETURNING registrations.id
+      ),
+      removed_schedule AS (
+        DELETE FROM registration_clear_schedule
+        USING due_schedule
+        WHERE registration_clear_schedule.schedule_key = due_schedule.schedule_key
+        RETURNING registration_clear_schedule.schedule_key
+      )
+      SELECT COUNT(*)::int AS deleted_count FROM deleted`;
+    return Number(rows[0]?.['deleted_count'] ?? 0);
+  }
+
+  const localDatabase = getSqliteDatabase();
+  localDatabase.exec('BEGIN IMMEDIATE');
+  try {
+    const schedule = localDatabase
+      .prepare(
+        `SELECT requested_at, scheduled_for
+         FROM registration_clear_schedule
+         WHERE schedule_key = ?`,
+      )
+      .get('all');
+    if (!schedule || String(schedule['scheduled_for']) > now) {
+      localDatabase.exec('COMMIT');
+      return 0;
+    }
+
+    const result = localDatabase
+      .prepare('DELETE FROM registrations WHERE created_at <= ?')
+      .run(String(schedule['requested_at']));
+    localDatabase
+      .prepare('DELETE FROM registration_clear_schedule WHERE schedule_key = ?')
+      .run('all');
+    localDatabase.exec('COMMIT');
+    return Number(result.changes);
+  } catch (error) {
+    localDatabase.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -496,6 +646,33 @@ function adminAuthentication(
   next();
 }
 
+function cronAuthentication(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  const expectedSecret = process.env['CRON_SECRET'];
+  if (!expectedSecret) {
+    res.status(503).json({ message: 'Scheduled clear is not configured.' });
+    return;
+  }
+
+  const authorization = req.get('authorization') || '';
+  const providedSecret = authorization.startsWith('Bearer ')
+    ? authorization.slice(7)
+    : '';
+  const providedBuffer = Buffer.from(providedSecret);
+  const expectedBuffer = Buffer.from(expectedSecret);
+  if (
+    providedBuffer.length !== expectedBuffer.length ||
+    !timingSafeEqual(providedBuffer, expectedBuffer)
+  ) {
+    res.status(401).json({ message: 'Unauthorized.' });
+    return;
+  }
+  next();
+}
+
 function readRegistration(
   row: StoredRegistrationRow,
   key: Buffer,
@@ -585,6 +762,93 @@ app.get('/api/admin/registrations', adminAuthentication, async (_req, res, next)
     next(error);
   }
 });
+
+app.get(
+  '/api/admin/registrations/clear-schedule',
+  adminAuthentication,
+  async (_req, res, next) => {
+    try {
+      if (!hasPersistentStorageConfigured()) {
+        res.status(503).json({ message: 'The secure storage service is not configured.' });
+        return;
+      }
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ schedule: await getRegistrationClearSchedule() });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.post(
+  '/api/admin/registrations/clear-schedule',
+  adminAuthentication,
+  async (_req, res, next) => {
+    try {
+      if (!hasPersistentStorageConfigured()) {
+        res.status(503).json({ message: 'The secure storage service is not configured.' });
+        return;
+      }
+      if (process.env['VERCEL'] && !process.env['CRON_SECRET']) {
+        res.status(503).json({ message: 'Scheduled clear is not configured. Set CRON_SECRET in Vercel.' });
+        return;
+      }
+      const schedule = await scheduleRegistrationClear();
+      if (!schedule) {
+        res.status(409).json({
+          message: 'A clear is already scheduled.',
+          schedule: await getRegistrationClearSchedule(),
+        });
+        return;
+      }
+      res.status(201).json({
+        message: 'All registrations present now are scheduled to be cleared in 10 days.',
+        schedule,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.delete(
+  '/api/admin/registrations/clear-schedule',
+  adminAuthentication,
+  async (_req, res, next) => {
+    try {
+      if (!hasPersistentStorageConfigured()) {
+        res.status(503).json({ message: 'The secure storage service is not configured.' });
+        return;
+      }
+      if (!(await cancelRegistrationClear())) {
+        res.status(404).json({ message: 'There is no scheduled clear to cancel.' });
+        return;
+      }
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ message: 'Scheduled clear cancelled.' });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.get(
+  '/api/cron/clear-registrations',
+  cronAuthentication,
+  async (_req, res, next) => {
+    try {
+      if (!hasPersistentStorageConfigured()) {
+        res.status(503).json({ message: 'The secure storage service is not configured.' });
+        return;
+      }
+      const deletedCount = await clearRegistrationsIfDue();
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ cleared: deletedCount > 0, deletedCount });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 app.delete(
   '/api/admin/registrations/:id',

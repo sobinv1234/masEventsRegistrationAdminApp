@@ -18,6 +18,7 @@ The server requires Node.js 22.12 or later (Vercel is pinned to Node.js 22). Con
 | `SMTP_FROM` | Optional sender address (defaults to `SMTP_USER`) |
 | `REGISTRATION_ENCRYPTION_KEY` | Required 32-byte base64 key used to encrypt participant records |
 | `DATABASE_URL` | Neon Postgres connection string; required on Vercel |
+| `CRON_SECRET` | Required on Vercel; secret bearer token for scheduled registration clearing |
 | `REGISTRATION_DB_PATH` | Optional local SQLite database path (defaults to `data/registrations.sqlite`) |
 
 Generate the encryption key with `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"` and save it as a deployment secret. Back up this key separately and securely: losing it makes stored registrations unreadable.
@@ -28,7 +29,11 @@ Participant details are encrypted before storage. Local development uses SQLite;
 
 ## Vercel deployment
 
-`vercel.json` builds the Angular browser output. The native ES module handlers in `api/` forward registration and admin requests to the Express API; admin list, delete, and email-retry paths have explicit Vercel function entries. Create a Neon Postgres database, add its connection string as `DATABASE_URL` in Vercel's project settings, configure `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, and `REGISTRATION_ENCRYPTION_KEY` too, then redeploy. Add the variables to every environment you test: deployment-specific preview URLs use **Preview** variables, while the production domain uses **Production** variables. The registrations table is created automatically on the first API request.
+`vercel.json` builds the Angular browser output. The native ES module handlers in `api/` forward registration, admin, and cleanup requests to the Express API; admin routes have explicit Vercel function entries. Create a Neon Postgres database, add its connection string as `DATABASE_URL` in Vercel's project settings, configure `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, `REGISTRATION_ENCRYPTION_KEY`, and a strong random `CRON_SECRET`, then redeploy. Add the variables to every environment you test: deployment-specific preview URLs use **Preview** variables, while the production domain uses **Production** variables. The registrations and clear-schedule tables are created automatically on the first API request.
+
+The dashboard's **Clear all data** action opens a confirmation dialog and schedules a purge 10 days later. The schedule can be cancelled before it runs. The daily Vercel Cron runs at 03:00 UTC, so the purge may occur up to 24 hours after its scheduled time. It deletes registrations that existed when the clear was scheduled and keeps later submissions. Vercel Cron jobs run on production deployments; test the dashboard schedule using Production environment variables and a production deployment.
+
+Generate `CRON_SECRET` locally with `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"` and add the output as a Vercel environment variable. Do not commit or share the generated secret.
 
 Vercel requests are rejected with a JSON configuration error if `DATABASE_URL` is missing; SQLite is never used as a Vercel fallback. Existing records in a local SQLite database are not copied automatically to Neon.
 

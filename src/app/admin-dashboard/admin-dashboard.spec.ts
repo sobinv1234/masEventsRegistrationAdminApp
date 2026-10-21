@@ -90,6 +90,61 @@ describe('AdminDashboard filters', () => {
     );
   });
 
+  it('schedules clearing all existing registrations from the generic confirmation dialog', async () => {
+    const fixture = TestBed.createComponent(AdminDashboard);
+    const dashboard = fixture.componentInstance;
+    dashboard['authorization'] = 'Basic test';
+    const schedule = {
+      requestedAt: '2026-10-21T12:00:00.000Z',
+      scheduledFor: '2026-10-31T12:00:00.000Z',
+    };
+    const fetchSpy = spyOn(globalThis, 'fetch').and.resolveTo(
+      new Response(JSON.stringify({ schedule }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    dashboard['requestClearAll']();
+    expect(dashboard['confirmationDialog']?.title).toBe('Schedule clear all data?');
+    expect(dashboard['confirmationDialog']?.message).toContain(
+      'Registrations submitted after scheduling will be kept.',
+    );
+
+    await dashboard['confirmDialogAction']();
+
+    expect(fetchSpy).toHaveBeenCalledWith('/api/admin/registrations/clear-schedule', {
+      method: 'POST',
+      headers: { Authorization: 'Basic test' },
+    });
+    expect(dashboard['clearSchedule']).toEqual(schedule);
+    expect(dashboard['confirmationDialog']).toBeNull();
+  });
+
+  it('cancels a previously scheduled data clear', async () => {
+    const fixture = TestBed.createComponent(AdminDashboard);
+    const dashboard = fixture.componentInstance;
+    dashboard['authorization'] = 'Basic test';
+    dashboard['clearSchedule'] = {
+      requestedAt: '2026-10-21T12:00:00.000Z',
+      scheduledFor: '2026-10-31T12:00:00.000Z',
+    };
+    const fetchSpy = spyOn(globalThis, 'fetch').and.resolveTo(
+      new Response(JSON.stringify({ message: 'Scheduled clear cancelled.' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await dashboard['cancelScheduledClear']();
+
+    expect(fetchSpy).toHaveBeenCalledWith('/api/admin/registrations/clear-schedule', {
+      method: 'DELETE',
+      headers: { Authorization: 'Basic test' },
+    });
+    expect(dashboard['clearSchedule']).toBeNull();
+  });
+
   it('paginates filtered registrations and resets to the first page when filters change', () => {
     const fixture = TestBed.createComponent(AdminDashboard);
     const dashboard = fixture.componentInstance;

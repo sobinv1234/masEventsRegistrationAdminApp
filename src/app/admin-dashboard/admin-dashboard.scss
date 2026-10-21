@@ -103,8 +103,38 @@ button:disabled {
   color: #fff;
 }
 
+.clear-data-button {
+  border: 1px solid #f0b9b4;
+  background: #8f1d14;
+  color: #fff;
+}
+
 .records {
   padding: 26px;
+}
+
+.scheduled-clear {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 16px;
+  border: 1px solid #e5b54a;
+  border-radius: 10px;
+  background: #fff8e5;
+  color: #513d0b;
+}
+
+.scheduled-clear p {
+  margin: 6px 0 0;
+}
+
+.cancel-scheduled-clear {
+  flex: 0 0 auto;
+  border: 1px solid #80600d;
+  background: #fff;
+  color: #513d0b;
 }
 
 .records-heading {
@@ -249,14 +279,7 @@ td > span {
   margin-top: 8px;
 }
 
-.delete-confirmation {
-  color: #8f1d14;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.delete-button,
-.cancel-delete-button {
+.delete-button {
   padding: 7px 10px;
   font-size: 12px;
 }
@@ -269,6 +292,36 @@ td > span {
   border: 1px solid #b9cbc1;
   background: #fff;
   color: #20332e;
+}
+
+.confirmation-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(16 35 29 / 60%);
+}
+
+.confirmation-dialog {
+  width: min(100%, 480px);
+  padding: 24px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 20px 70px rgb(0 0 0 / 25%);
+}
+
+.confirmation-dialog p {
+  margin: 12px 0 24px;
+  color: #43554c;
+  line-height: 1.55;
+}
+
+.confirmation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .empty-state {
@@ -305,6 +358,11 @@ td > span {
 
   .header-actions {
     flex-wrap: wrap;
+  }
+
+  .scheduled-clear {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .records {
