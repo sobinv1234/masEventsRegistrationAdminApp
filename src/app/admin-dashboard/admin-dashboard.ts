@@ -142,6 +142,29 @@ export class AdminDashboard {
     };
   }
 
+  protected downloadExcel(): void {
+    if (this.records.length === 0) {
+      return;
+    }
+
+    try {
+      const csv = this.buildCsv();
+      const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `MAS-Board-Games-2026-registrations-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      this.errorMessage =
+        error instanceof Error
+          ? `Could not create the registration download: ${error.message}`
+          : 'Could not create the registration download.';
+      this.changeDetector.markForCheck();
+    }
+  }
+
   protected async confirmDialogAction(): Promise<void> {
     const dialog = this.confirmationDialog;
     this.confirmationDialog = null;
@@ -396,5 +419,42 @@ export class AdminDashboard {
   private encodeCredentials(username: string, password: string): string {
     const bytes = new TextEncoder().encode(`${username}:${password}`);
     return btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(''));
+  }
+
+  private buildCsv(): string {
+    const rows: (string | number)[][] = [
+      [
+        'Participant name',
+        'Age',
+        'Contact number',
+        'Email address',
+        'Parent / guardian',
+        'Games and categories',
+        'Submitted at (UTC)',
+        'Email status',
+      ],
+      ...this.records.map((record) => [
+        record.name,
+        record.age,
+        record.phone,
+        record.email,
+        record.guardian,
+        record.games.map(({ game, category }) => `${game} (${category})`).join('; '),
+        record.createdAt,
+        record.emailSent ? 'Sent' : 'Not sent',
+      ]),
+    ];
+
+    return rows
+      .map((row) =>
+        row
+          .map((value) => {
+            const text = String(value);
+            const safeText = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+            return `"${safeText.replace(/"/g, '""')}"`;
+          })
+          .join(','),
+      )
+      .join('\r\n');
   }
 }

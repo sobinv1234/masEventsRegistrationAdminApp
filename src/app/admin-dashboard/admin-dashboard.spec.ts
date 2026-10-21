@@ -71,6 +71,34 @@ describe('AdminDashboard filters', () => {
     expect(dashboard['emailFilter']).toBe('all');
   });
 
+  it('creates an Excel-compatible CSV containing all registrations with safe escaped cells', () => {
+    const fixture = TestBed.createComponent(AdminDashboard);
+    const dashboard = fixture.componentInstance;
+    dashboard['records'] = [
+      {
+        id: 'export-record',
+        createdAt: '2026-10-01T10:00:00.000Z',
+        name: '=HYPERLINK("https://example.com")',
+        age: 14,
+        phone: '07123456789',
+        email: 'alex@example.com',
+        guardian: 'Sam, Guardian',
+        games: [{ game: 'Chess', category: '14–17' }],
+        emailSent: true,
+      },
+    ];
+    dashboard['ageFilter'] = '8-13';
+
+    const csv = dashboard['buildCsv']();
+
+    expect(csv.split('\r\n').length).toBe(2);
+    expect(csv).toContain('"Participant name","Age","Contact number"');
+    expect(csv).toContain('"\'=HYPERLINK(""https://example.com"")"');
+    expect(csv).toContain('"Sam, Guardian"');
+    expect(csv).toContain('"Chess (14–17)"');
+    expect(csv).toContain('"Sent"');
+  });
+
   it('reports a missing dashboard API route instead of a configuration error', async () => {
     const fixture = TestBed.createComponent(AdminDashboard);
     const dashboard = fixture.componentInstance;

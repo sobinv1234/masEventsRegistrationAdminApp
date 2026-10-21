@@ -12,17 +12,26 @@
           <button type="button" class="secondary" [disabled]="loading" (click)="refresh()">
             {{ loading ? 'Loading…' : 'Refresh' }}
           </button>
-          <div>
-          <button
-            type="button"
-            class="clear-data-button"
-            [disabled]="clearActionLoading || clearSchedule !== null"
-            (click)="requestClearAll()"
-          >
-            Clear all data
-          </button>
-          <button type="button" class="secondary" (click)="signOut()">Sign out</button>
-        </div>
+          <div class="d-flex gap-2">
+            <button
+              type="button"
+              class="secondary"
+              [disabled]="loading || records.length === 0"
+              aria-label="Download all registrations as an Excel-compatible CSV file"
+              (click)="downloadExcel()"
+            >
+              Download Excel
+            </button>
+            <button
+              type="button"
+              class="clear-data-button"
+              [disabled]="clearActionLoading || clearSchedule !== null"
+              (click)="requestClearAll()"
+            >
+              Clear all data
+            </button>
+            <button type="button" class="secondary" (click)="signOut()">Sign out</button>
+          </div>
         </div>
         </div>
       }
