@@ -15,7 +15,8 @@ import {
 import { chmodSync, mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
-import type { DatabaseSync as SqliteDatabase, SQLOutputValue } from 'node:sqlite';
+import type { DatabaseSync as SqliteDatabase } from 'node:sqlite';
+import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import nodemailer, { type Transporter } from 'nodemailer';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
@@ -45,8 +46,13 @@ const angularApp = new AngularNodeAppEngine();
 app.use(express.json({ limit: '10kb' }));
 
 let database: SqliteDatabase | undefined;
+let neonSql: NeonQueryFunction<false, false> | undefined;
+let neonSchemaReady: Promise<void> | undefined;
 
-function getDatabase(): SqliteDatabase {
+function getSqliteDatabase(): SqliteDatabase {
+  if (process.env['VERCEL'] && !process.env['DATABASE_URL']) {
+    throw new Error('DATABASE_URL is required for durable registration storage on Vercel.');
+  }
   if (database) {
     return database;
   }
@@ -68,6 +74,146 @@ function getDatabase(): SqliteDatabase {
   `);
   chmodSync(databasePath, 0o600);
   return database;
+}
+
+function getNeonSql(): NeonQueryFunction<false, false> {
+  const connectionString = process.env['DATABASE_URL'];
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is not configured.');
+  }
+  neonSql ??= neon(connectionString);
+  return neonSql;
+}
+
+async function ensureNeonSchema(): Promise<void> {
+  if (!neonSchemaReady) {
+    neonSchemaReady = getNeonSql()`CREATE TABLE IF NOT EXISTS registrations (
+      id TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL,
+      registration_data TEXT NOT NULL,
+      email_sent BOOLEAN NOT NULL DEFAULT FALSE
+    )`
+      .then(() => undefined)
+      .catch((error: unknown) => {
+        neonSchemaReady = undefined;
+        throw error;
+      });
+  }
+  await neonSchemaReady;
+}
+
+function hasPersistentStorageConfigured(): boolean {
+  return Boolean(process.env['DATABASE_URL']) || !process.env['VERCEL'];
+}
+
+type StoredRegistrationRow = {
+  registration_data: unknown;
+  email_sent: unknown;
+};
+
+async function saveRegistration(registration: Registration, key: Buffer): Promise<void> {
+  const encodedRegistration = encryptRegistration(registration, key);
+  if (process.env['DATABASE_URL']) {
+    await ensureNeonSchema();
+    await getNeonSql()`INSERT INTO registrations
+      (id, created_at, registration_data)
+      VALUES (${registration.id}, ${registration.createdAt}, ${encodedRegistration})`;
+    return;
+  }
+
+  getSqliteDatabase()
+    .prepare(
+      `INSERT INTO registrations
+        (id, created_at, registration_data)
+       VALUES (?, ?, ?)`,
+    )
+    .run(registration.id, registration.createdAt, encodedRegistration);
+}
+
+async function setEmailSent(registrationId: string): Promise<void> {
+  if (process.env['DATABASE_URL']) {
+    await ensureNeonSchema();
+    await getNeonSql()`UPDATE registrations SET email_sent = TRUE WHERE id = ${registrationId}`;
+    return;
+  }
+
+  getSqliteDatabase()
+    .prepare('UPDATE registrations SET email_sent = 1 WHERE id = ?')
+    .run(registrationId);
+}
+
+async function getRegistrations(): Promise<StoredRegistrationRow[]> {
+  if (process.env['DATABASE_URL']) {
+    await ensureNeonSchema();
+    const rows = await getNeonSql()`SELECT registration_data, email_sent
+      FROM registrations
+      ORDER BY created_at DESC
+      LIMIT 500`;
+    return rows.map((row) => ({
+      registration_data: row['registration_data'],
+      email_sent: row['email_sent'],
+    }));
+  }
+
+  return getSqliteDatabase()
+    .prepare(
+      `SELECT registration_data, email_sent
+       FROM registrations
+       ORDER BY created_at DESC
+       LIMIT 500`,
+    )
+    .all()
+    .map((row) => ({
+      registration_data: row['registration_data'],
+      email_sent: row['email_sent'],
+    }));
+}
+
+async function getRegistration(
+  registrationId: string,
+): Promise<StoredRegistrationRow | undefined> {
+  if (process.env['DATABASE_URL']) {
+    await ensureNeonSchema();
+    const rows = await getNeonSql()`SELECT registration_data, email_sent
+      FROM registrations
+      WHERE id = ${registrationId}
+      LIMIT 1`;
+    const row = rows[0];
+    return row
+      ? {
+          registration_data: row['registration_data'],
+          email_sent: row['email_sent'],
+        }
+      : undefined;
+  }
+
+  const row = getSqliteDatabase()
+    .prepare(
+      `SELECT registration_data, email_sent
+       FROM registrations WHERE id = ?`,
+    )
+    .get(registrationId);
+  return row
+    ? {
+        registration_data: row['registration_data'],
+        email_sent: row['email_sent'],
+      }
+    : undefined;
+}
+
+async function removeRegistration(registrationId: string): Promise<boolean> {
+  if (process.env['DATABASE_URL']) {
+    await ensureNeonSchema();
+    const rows = await getNeonSql()`DELETE FROM registrations
+      WHERE id = ${registrationId}
+      RETURNING id`;
+    return rows.length > 0;
+  }
+
+  const result = getSqliteDatabase()
+    .prepare('DELETE FROM registrations WHERE id = ?')
+    .run(registrationId);
+  return result.changes > 0;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -338,13 +484,13 @@ function adminAuthentication(
 }
 
 function readRegistration(
-  row: Record<string, SQLOutputValue>,
+  row: StoredRegistrationRow,
   key: Buffer,
 ): Registration {
   return decryptRegistration(
     String(row['registration_data']),
     key,
-    Number(row['email_sent']) === 1,
+    row['email_sent'] === true || Number(row['email_sent']) === 1,
   );
 }
 
@@ -364,6 +510,12 @@ app.post('/api/registrations', async (req, res, next) => {
     });
     return;
   }
+  if (!hasPersistentStorageConfigured()) {
+    res.status(503).json({
+      message: 'Registration storage is not configured. Set DATABASE_URL before accepting registrations.',
+    });
+    return;
+  }
 
   try {
     const id = randomUUID();
@@ -380,17 +532,7 @@ app.post('/api/registrations', async (req, res, next) => {
       games,
       emailSent: false,
     };
-    getDatabase()
-      .prepare(
-        `INSERT INTO registrations
-          (id, created_at, registration_data)
-         VALUES (?, ?, ?)`,
-      )
-      .run(
-        id,
-        createdAt,
-        encryptRegistration(savedRegistration, encryptionKey),
-      );
+    await saveRegistration(savedRegistration, encryptionKey);
 
     try {
       await transporter.sendMail({
@@ -399,9 +541,7 @@ app.post('/api/registrations', async (req, res, next) => {
         subject: 'New MAS Board Games 2026 registration',
         text: buildRegistrationEmail(savedRegistration),
       });
-      getDatabase()
-        .prepare('UPDATE registrations SET email_sent = 1 WHERE id = ?')
-        .run(id);
+      await setEmailSent(id);
     } catch (error) {
       console.error(`Email notification failed for registration ${id}.`, error);
       res.status(502).json({
@@ -418,21 +558,14 @@ app.post('/api/registrations', async (req, res, next) => {
   }
 });
 
-app.get('/api/admin/registrations', adminAuthentication, (_req, res, next) => {
+app.get('/api/admin/registrations', adminAuthentication, async (_req, res, next) => {
   try {
     const encryptionKey = getEncryptionKey();
-    if (!encryptionKey) {
+    if (!encryptionKey || !hasPersistentStorageConfigured()) {
       res.status(503).json({ message: 'The secure storage service is not configured.' });
       return;
     }
-    const rows = getDatabase()
-      .prepare(
-        `SELECT registration_data, email_sent
-         FROM registrations
-         ORDER BY created_at DESC
-         LIMIT 500`,
-      )
-      .all();
+    const rows = await getRegistrations();
     res.setHeader('Cache-Control', 'no-store');
     res.json(rows.map((row) => readRegistration(row, encryptionKey)));
   } catch (error) {
@@ -443,7 +576,7 @@ app.get('/api/admin/registrations', adminAuthentication, (_req, res, next) => {
 app.delete(
   '/api/admin/registrations/:id',
   adminAuthentication,
-  (req, res, next) => {
+  async (req, res, next) => {
     const registrationId = req.params['id'];
     if (
       typeof registrationId !== 'string' ||
@@ -454,10 +587,7 @@ app.delete(
     }
 
     try {
-      const result = getDatabase()
-        .prepare('DELETE FROM registrations WHERE id = ?')
-        .run(registrationId);
-      if (result.changes === 0) {
+      if (!(await removeRegistration(registrationId))) {
         res.status(404).json({ message: 'Registration not found.' });
         return;
       }
@@ -482,18 +612,16 @@ app.post(
         });
         return;
       }
-      const database = getDatabase();
       const registrationId = req.params['id'];
       if (typeof registrationId !== 'string') {
         res.status(404).json({ message: 'Registration not found.' });
         return;
       }
-      const row = database
-        .prepare(
-          `SELECT registration_data, email_sent
-           FROM registrations WHERE id = ?`,
-        )
-        .get(registrationId);
+      if (!hasPersistentStorageConfigured()) {
+        res.status(503).json({ message: 'The secure storage service is not configured.' });
+        return;
+      }
+      const row = await getRegistration(registrationId);
       if (!row) {
         res.status(404).json({ message: 'Registration not found.' });
         return;
@@ -505,9 +633,7 @@ app.post(
         subject: 'New MAS Board Games 2026 registration',
         text: buildRegistrationEmail(registration),
       });
-      database
-        .prepare('UPDATE registrations SET email_sent = 1 WHERE id = ?')
-        .run(registration.id);
+      await setEmailSent(registration.id);
       res.json({ message: 'Email notification sent.' });
     } catch (error) {
       console.error(`Email retry failed for registration ${req.params['id']}.`, error);
@@ -538,6 +664,38 @@ app.use((req, res, next) => {
     )
     .catch(next);
 });
+
+app.use(
+  (
+    error: unknown,
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    if (res.headersSent) {
+      next(error);
+      return;
+    }
+    if (req.path.startsWith('/api/')) {
+      console.error('Unhandled API request error.', error);
+      const responseStatus =
+        isRecord(error) &&
+        typeof error['status'] === 'number' &&
+        error['status'] >= 400 &&
+        error['status'] < 500
+          ? error['status']
+          : 500;
+      res.status(responseStatus).json({
+        message:
+          responseStatus < 500
+            ? 'The API request is invalid.'
+            : 'The API could not complete this request.',
+      });
+      return;
+    }
+    next(error);
+  },
+);
 
 /**
  * Start the server if this module is the main entry point.
