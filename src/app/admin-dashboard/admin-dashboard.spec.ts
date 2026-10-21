@@ -71,6 +71,25 @@ describe('AdminDashboard filters', () => {
     expect(dashboard['emailFilter']).toBe('all');
   });
 
+  it('reports a missing dashboard API route instead of a configuration error', async () => {
+    const fixture = TestBed.createComponent(AdminDashboard);
+    const dashboard = fixture.componentInstance;
+    dashboard['username'] = 'committee';
+    dashboard['password'] = 'test-password';
+    spyOn(globalThis, 'fetch').and.resolveTo(
+      new Response('Not Found', {
+        status: 404,
+        headers: { 'Content-Type': 'text/plain' },
+      }),
+    );
+
+    await dashboard['login'](new Event('submit') as SubmitEvent);
+
+    expect(dashboard['errorMessage']).toBe(
+      'Dashboard API route was not found (HTTP 404). Check the Vercel function deployment.',
+    );
+  });
+
   it('paginates filtered registrations and resets to the first page when filters change', () => {
     const fixture = TestBed.createComponent(AdminDashboard);
     const dashboard = fixture.componentInstance;

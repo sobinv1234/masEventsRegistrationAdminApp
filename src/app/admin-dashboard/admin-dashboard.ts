@@ -170,7 +170,7 @@ export class AdminDashboard {
         throw new Error('Username or password is incorrect.');
       }
       if (!response.ok) {
-        throw new Error('The dashboard is not configured. Contact the site administrator.');
+        throw new Error(await this.getApiError(response, 'Could not sign in.'));
       }
       this.records = await response.json();
       this.loggedIn = true;
@@ -200,7 +200,9 @@ export class AdminDashboard {
         cache: 'no-store',
       });
       if (!response.ok) {
-        throw new Error('Could not load registrations. Please sign in again.');
+        throw new Error(
+          await this.getApiError(response, 'Could not load registrations.'),
+        );
       }
       this.records = await response.json();
       this.changeDetector.markForCheck();
@@ -225,8 +227,9 @@ export class AdminDashboard {
         },
       );
       if (!response.ok) {
-        const result: { message?: string } = await response.json();
-        throw new Error(result.message ?? 'Could not send the email notification.');
+        throw new Error(
+          await this.getApiError(response, 'Could not send the email notification.'),
+        );
       }
       record.emailSent = true;
       this.changeDetector.markForCheck();
@@ -249,6 +252,20 @@ export class AdminDashboard {
     this.pendingDeleteId = null;
     this.deletingId = null;
     this.loggedIn = false;
+  }
+
+  private async getApiError(response: Response, fallback: string): Promise<string> {
+    try {
+      const result: { message?: unknown } = await response.json();
+      if (typeof result.message === 'string' && result.message) {
+        return result.message;
+      }
+    } catch {
+      if (response.status === 404) {
+        return 'Dashboard API route was not found (HTTP 404). Check the Vercel function deployment.';
+      }
+    }
+    return `${fallback} (HTTP ${response.status}).`;
   }
 
   protected formatDate(value: string): string {

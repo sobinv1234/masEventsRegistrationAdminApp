@@ -4,6 +4,15 @@
   "functions": {
     "api/[...path].mjs": {
       "includeFiles": "dist/mas/**"
+    },
+    "api/admin/registrations.mjs": {
+      "includeFiles": "dist/mas/**"
+    },
+    "api/admin/registrations/[id].mjs": {
+      "includeFiles": "dist/mas/**"
+    },
+    "api/admin/registrations/[id]/email.mjs": {
+      "includeFiles": "dist/mas/**"
     }
   }
 }
