@@ -28,7 +28,7 @@ Participant details are encrypted before storage. Local development uses SQLite;
 
 ## Vercel deployment
 
-`vercel.json` builds the Angular browser output and `api/[...path].ts` forwards `/api/*` requests to the existing Express API. Create a Neon Postgres database, add its connection string as `DATABASE_URL` in Vercel's project settings, configure the other environment variables above, then redeploy. The registrations table is created automatically on the first API request.
+`vercel.json` builds the Angular browser output and `api/[...path].mjs` forwards `/api/*` requests to the existing Express API using a native ES module entry point. Create a Neon Postgres database, add its connection string as `DATABASE_URL` in Vercel's project settings, configure the other environment variables above, then redeploy. Add the variables to every environment you test: deployment-specific preview URLs use **Preview** variables, while the production domain uses **Production** variables. The registrations table is created automatically on the first API request.
 
 Vercel requests are rejected with a JSON configuration error if `DATABASE_URL` is missing; SQLite is never used as a Vercel fallback. Existing records in a local SQLite database are not copied automatically to Neon.
 
