@@ -4,7 +4,7 @@ MAS Board Games 2026 registration app, with a committee-only dashboard.
 
 ## Registration and dashboard setup
 
-The server requires Node.js 22.12 or later. Configure these environment variables on the server before accepting registrations:
+The server requires Node.js 22.12 or later (Vercel is pinned to Node.js 22). Configure these environment variables on the server before accepting registrations:
 
 | Variable | Purpose |
 | --- | --- |

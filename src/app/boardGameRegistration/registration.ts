@@ -86,8 +86,14 @@ export class Registration {
           consent: this.consent,
         }),
       });
-      const result: { message?: string; registrationSaved?: boolean } =
-        await response.json();
+      let result: { message?: string; registrationSaved?: boolean };
+      try {
+        result = await response.json();
+      } catch {
+        throw new Error(
+          `The registration service returned an invalid response (HTTP ${response.status}). Please try again later.`,
+        );
+      }
       if (!response.ok) {
         if (result.registrationSaved) {
           this.successMessage = result.message ?? 'Your registration was saved.';

@@ -20,9 +20,7 @@ import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import nodemailer, { type Transporter } from 'nodemailer';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
-const { DatabaseSync } = createRequire(import.meta.url)(
-  'node:sqlite',
-) as typeof import('node:sqlite');
+const require = createRequire(import.meta.url);
 const registrationGames = ['Carroms', 'Chess', 'PlayStation', 'Cards'] as const;
 type Game = (typeof registrationGames)[number];
 type GameChoice = { game: Game; category: string };
@@ -56,6 +54,7 @@ function getSqliteDatabase(): SqliteDatabase {
   if (database) {
     return database;
   }
+  const { DatabaseSync } = require('node:sqlite') as typeof import('node:sqlite');
 
   const databasePath = resolve(
     process.env['REGISTRATION_DB_PATH'] ||
