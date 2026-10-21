@@ -109,4 +109,73 @@ describe('AdminDashboard filters', () => {
     dashboard['goToPage'](99);
     expect(dashboard['currentPage']).toBe(2);
   });
+
+  it('deletes a registration only after confirmation and removes it from the dashboard', async () => {
+    const fixture = TestBed.createComponent(AdminDashboard);
+    const dashboard = fixture.componentInstance;
+    const record = {
+      id: 'registration-to-delete',
+      createdAt: '2026-10-01T10:00:00.000Z',
+      name: 'Participant',
+      age: 18,
+      phone: '07000000000',
+      email: '',
+      guardian: '',
+      games: [{ game: 'Cards', category: '18+' }],
+      emailSent: true,
+    };
+    dashboard['records'] = [record];
+    dashboard['authorization'] = 'Basic test';
+    const fetchSpy = spyOn(globalThis, 'fetch').and.resolveTo(
+      new Response(null, { status: 204 }),
+    );
+
+    await dashboard['deleteRegistration'](record);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(dashboard['records']).toEqual([record]);
+
+    dashboard['requestDelete'](record);
+    await dashboard['deleteRegistration'](record);
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/admin/registrations/registration-to-delete',
+      {
+        method: 'DELETE',
+        headers: { Authorization: 'Basic test' },
+      },
+    );
+    expect(dashboard['records']).toEqual([]);
+    expect(dashboard['pendingDeleteId']).toBeNull();
+    expect(dashboard['deletingId']).toBeNull();
+  });
+
+  it('does not remove a registration when delete fails', async () => {
+    const fixture = TestBed.createComponent(AdminDashboard);
+    const dashboard = fixture.componentInstance;
+    const record = {
+      id: 'registration-delete-failure',
+      createdAt: '2026-10-01T10:00:00.000Z',
+      name: 'Participant',
+      age: 18,
+      phone: '07000000000',
+      email: '',
+      guardian: '',
+      games: [{ game: 'Chess', category: '18+' }],
+      emailSent: true,
+    };
+    dashboard['records'] = [record];
+    dashboard['authorization'] = 'Basic test';
+    spyOn(globalThis, 'fetch').and.resolveTo(
+      new Response(JSON.stringify({ message: 'Registration not found.' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    dashboard['requestDelete'](record);
+
+    await dashboard['deleteRegistration'](record);
+
+    expect(dashboard['records']).toEqual([record]);
+    expect(dashboard['errorMessage']).toBe('Registration not found.');
+  });
 });

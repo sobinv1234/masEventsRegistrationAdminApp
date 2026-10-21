@@ -151,6 +151,7 @@
                   <th>Parent / guardian</th>
                   <th>Submitted</th>
                   <th>Email status</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -184,6 +185,41 @@
                           (click)="retryEmail(record)"
                         >
                           Retry email
+                        </button>
+                      }
+                    </td>
+                    <td>
+                      @if (pendingDeleteId === record.id) {
+                        <span class="delete-confirmation">
+                          Delete this registration?
+                        </span>
+                        <div class="row-actions">
+                          <button
+                            type="button"
+                            class="delete-button"
+                            [disabled]="deletingId !== null"
+                            (click)="deleteRegistration(record)"
+                          >
+                            {{ deletingId === record.id ? 'Deleting…' : 'Confirm delete' }}
+                          </button>
+                          <button
+                            type="button"
+                            class="cancel-delete-button"
+                            [disabled]="deletingId !== null"
+                            (click)="cancelDelete()"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      } @else {
+                        <button
+                          type="button"
+                          class="delete-button"
+                          [disabled]="deletingId !== null"
+                          (click)="requestDelete(record)"
+                          [attr.aria-label]="'Delete registration for ' + record.name"
+                        >
+                          Delete
                         </button>
                       }
                     </td>

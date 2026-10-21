@@ -440,6 +440,35 @@ app.get('/api/admin/registrations', adminAuthentication, (_req, res, next) => {
   }
 });
 
+app.delete(
+  '/api/admin/registrations/:id',
+  adminAuthentication,
+  (req, res, next) => {
+    const registrationId = req.params['id'];
+    if (
+      typeof registrationId !== 'string' ||
+      !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(registrationId)
+    ) {
+      res.status(400).json({ message: 'Registration ID is invalid.' });
+      return;
+    }
+
+    try {
+      const result = getDatabase()
+        .prepare('DELETE FROM registrations WHERE id = ?')
+        .run(registrationId);
+      if (result.changes === 0) {
+        res.status(404).json({ message: 'Registration not found.' });
+        return;
+      }
+      res.setHeader('Cache-Control', 'no-store');
+      res.status(204).end();
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 app.post(
   '/api/admin/registrations/:id/email',
   adminAuthentication,

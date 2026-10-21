@@ -38,6 +38,8 @@ export class AdminDashboard {
   protected loading = false;
   protected loggedIn = false;
   protected errorMessage = '';
+  protected pendingDeleteId: string | null = null;
+  protected deletingId: string | null = null;
   private authorization = '';
 
   protected get filteredRecords(): RegistrationRecord[] {
@@ -100,6 +102,50 @@ export class AdminDashboard {
 
   protected goToPage(page: number): void {
     this.currentPage = Math.min(Math.max(1, page), this.totalPages);
+  }
+
+  protected requestDelete(record: RegistrationRecord): void {
+    this.pendingDeleteId = record.id;
+  }
+
+  protected cancelDelete(): void {
+    this.pendingDeleteId = null;
+  }
+
+  protected async deleteRegistration(record: RegistrationRecord): Promise<void> {
+    if (this.pendingDeleteId !== record.id || this.deletingId !== null) {
+      return;
+    }
+
+    this.errorMessage = '';
+    this.deletingId = record.id;
+    try {
+      const response = await fetch(
+        `/api/admin/registrations/${encodeURIComponent(record.id)}`,
+        {
+          method: 'DELETE',
+          headers: { Authorization: this.authorization },
+        },
+      );
+      if (!response.ok) {
+        const result: { message?: string } = await response.json();
+        throw new Error(result.message ?? 'Could not delete this registration.');
+      }
+
+      this.records = this.records.filter((savedRecord) => savedRecord.id !== record.id);
+      this.pendingDeleteId = null;
+      this.currentPage = Math.min(this.currentPage, this.totalPages);
+    } catch (error) {
+      this.errorMessage =
+        error instanceof TypeError
+          ? 'Could not reach the dashboard service. Please try again.'
+          : error instanceof Error
+            ? error.message
+            : 'Could not delete this registration.';
+    } finally {
+      this.deletingId = null;
+      this.changeDetector.markForCheck();
+    }
   }
 
   protected clearFilters(): void {
@@ -200,6 +246,8 @@ export class AdminDashboard {
     this.username = '';
     this.password = '';
     this.records = [];
+    this.pendingDeleteId = null;
+    this.deletingId = null;
     this.loggedIn = false;
   }
 

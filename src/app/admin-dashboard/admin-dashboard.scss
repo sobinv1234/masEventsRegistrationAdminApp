@@ -242,6 +242,35 @@ td > span {
   font-size: 12px;
 }
 
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.delete-confirmation {
+  color: #8f1d14;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.delete-button,
+.cancel-delete-button {
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.delete-button {
+  background: #a52a20;
+}
+
+.cancel-delete-button {
+  border: 1px solid #b9cbc1;
+  background: #fff;
+  color: #20332e;
+}
+
 .empty-state {
   padding: 28px;
   border-radius: 10px;
