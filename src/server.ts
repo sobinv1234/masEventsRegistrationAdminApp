@@ -339,6 +339,20 @@ function getEncryptionKey(): Buffer | null {
   return key.length === 32 && key.toString('base64') === encodedKey ? key : null;
 }
 
+function getRegistrationConfigurationIssues(): string[] {
+  const issues = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS'].filter(
+    (key) => !process.env[key],
+  );
+  const port = process.env['SMTP_PORT'];
+  if (port && (!Number.isInteger(Number(port)) || Number(port) < 1 || Number(port) > 65535)) {
+    issues.push('SMTP_PORT (must be between 1 and 65535)');
+  }
+  if (!getEncryptionKey()) {
+    issues.push('REGISTRATION_ENCRYPTION_KEY (must be 32-byte base64)');
+  }
+  return issues;
+}
+
 function encryptRegistration(registration: Registration, key: Buffer): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', key, iv);
@@ -503,9 +517,9 @@ app.post('/api/registrations', async (req, res, next) => {
   const transporter = createEmailTransporter();
   const encryptionKey = getEncryptionKey();
   if (!transporter || !encryptionKey) {
+    const configurationIssues = getRegistrationConfigurationIssues();
     res.status(503).json({
-      message:
-        'Registration is not open yet. The committee email or secure storage service is not configured.',
+      message: `Registration is not open yet. Configure these Vercel environment variables: ${configurationIssues.join(', ') || 'SMTP settings'}.`,
     });
     return;
   }
