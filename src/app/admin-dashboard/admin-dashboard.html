@@ -1,0 +1,237 @@
+<main class="dashboard-page">
+  <section class="dashboard-card col-12">
+    <header class="dashboard-header">
+      <div class="dashboard-header-text text-center">
+        <span class="eyebrow">MAS EXECUTIVE COMMITTEE</span>
+        <h1>Board Games 2026</h1>
+        <p>Registration dashboard</p>
+      </div>
+      @if (loggedIn) {
+        <div class="col-12">
+        <div class="header-actions ms-auto justify-content-between">
+          <button type="button" class="secondary" [disabled]="loading" (click)="refresh()">
+            {{ loading ? 'Loading…' : 'Refresh' }}
+          </button>
+          <button type="button" class="secondary" (click)="signOut()">Sign out</button>
+        </div>
+        </div>
+      }
+    </header>
+
+    @if (!loggedIn) {
+      <form class="login-form" (submit)="login($event)">
+        <div class="col-12 text-center"></div>
+        <h2>Committee sign in</h2>
+        <p>Use the dashboard credentials configured by the site administrator.</p>
+       
+        <label>
+          Username
+          <input
+            name="username"
+            [(ngModel)]="username"
+            required
+            autocomplete="username"
+          />
+        </label>
+        <label>
+          Password
+          <input
+            name="password"
+            type="password"
+            [(ngModel)]="password"
+            required
+            autocomplete="current-password"
+          />
+        </label>
+        @if (errorMessage) {
+          <p class="error" role="alert">{{ errorMessage }}</p>
+        }
+        <div class="col-12 text-center">
+        <button type="submit" [disabled]="loading || !username || !password">
+          {{ loading ? 'Signing in…' : 'Sign in' }}
+        </button>
+        </div>
+      </form>
+    } @else {
+      <section class="records" aria-live="polite">
+        <div class="records-heading">
+          <div>
+            <h2>Participants</h2>
+            <p>
+              Showing {{ firstVisibleRecord }}–{{ lastVisibleRecord }} of {{ filteredRecords.length }}
+              filtered from {{ records.length }}
+              registration{{ records.length === 1 ? '' : 's' }}
+            </p>
+          </div>
+        </div>
+        @if (errorMessage) {
+          <p class="error" role="alert">{{ errorMessage }}</p>
+        }
+        @if (records.length > 0) {
+          <section class="filters" aria-label="Filter registrations">
+            <div class="filter-search">
+              <label for="registration-search">Search participants</label>
+              <input
+                id="registration-search"
+                class="form-control"
+                type="search"
+                name="searchTerm"
+                [(ngModel)]="searchTerm"
+                (ngModelChange)="onFiltersChanged()"
+                placeholder="Name, email, phone, or guardian"
+              />
+            </div>
+            <div class="filter-control">
+              <label for="registration-age-filter">Age category</label>
+              <select
+                id="registration-age-filter"
+                class="form-select"
+                name="ageFilter"
+                [(ngModel)]="ageFilter"
+                (ngModelChange)="onFiltersChanged()"
+              >
+                <option value="all">All ages</option>
+                <option value="8-13">8–13</option>
+                <option value="14-17">14–17</option>
+                <option value="18-plus">18+</option>
+              </select>
+            </div>
+            <div class="filter-control">
+              <label for="registration-game-filter">Game</label>
+              <select
+                id="registration-game-filter"
+                class="form-select"
+                name="gameFilter"
+                [(ngModel)]="gameFilter"
+                (ngModelChange)="onFiltersChanged()"
+              >
+                <option value="all">All games</option>
+                <option value="Carroms">Carroms</option>
+                <option value="Chess">Chess</option>
+                <option value="PlayStation">PlayStation</option>
+                <option value="Cards">Cards</option>
+              </select>
+            </div>
+            <div class="filter-control">
+              <label for="registration-email-filter">Email notification</label>
+              <select
+                id="registration-email-filter"
+                class="form-select"
+                name="emailFilter"
+                [(ngModel)]="emailFilter"
+                (ngModelChange)="onFiltersChanged()"
+              >
+                <option value="all">All statuses</option>
+                <option value="sent">Sent</option>
+                <option value="pending">Not sent</option>
+              </select>
+            </div>
+            <button
+              type="button"
+              class="clear-filters"
+              [disabled]="!hasActiveFilters"
+              (click)="clearFilters()"
+            >
+              Clear filters
+            </button>
+          </section>
+        }
+        @if (records.length === 0) {
+          <p class="empty-state">There are no registrations yet.</p>
+        } @else if (filteredRecords.length === 0) {
+          <p class="empty-state" role="status">No registrations match these filters.</p>
+        } @else {
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Participant</th>
+                  <th>Games</th>
+                  <th>Contact</th>
+                  <th>Parent / guardian</th>
+                  <th>Submitted</th>
+                  <th>Email status</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (record of paginatedRecords; track record.id) {
+                  <tr>
+                    <td>
+                      <strong>{{ record.name }}</strong>
+                      <span>{{ record.age }} years</span>
+                    </td>
+                    <td>
+                      @for (choice of record.games; track choice.game) {
+                        <span class="game-chip">{{ choice.game }} · {{ choice.category }}</span>
+                      }
+                    </td>
+                    <td>
+                      <span>{{ record.phone }}</span>
+                      @if (record.email) {
+                        <span>{{ record.email }}</span>
+                      }
+                    </td>
+                    <td>{{ record.guardian || '—' }}</td>
+                    <td>{{ formatDate(record.createdAt) }}</td>
+                    <td>
+                      @if (record.emailSent) {
+                        <span>Sent</span>
+                      } @else {
+                        <span class="pending">Not sent</span>
+                        <button
+                          type="button"
+                          class="retry-button"
+                          (click)="retryEmail(record)"
+                        >
+                          Retry email
+                        </button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <nav class="pagination-bar" aria-label="Registration pages">
+            <label class="page-size-control" for="registration-page-size">
+              Rows per page
+              <select
+                id="registration-page-size"
+                class="form-select"
+                name="pageSize"
+                [(ngModel)]="pageSize"
+                (ngModelChange)="onFiltersChanged()"
+              >
+                <option [ngValue]="10">10</option>
+                <option [ngValue]="25">25</option>
+                <option [ngValue]="50">50</option>
+              </select>
+            </label>
+            <div class="page-controls">
+              <span class="page-count">Page {{ currentPage }} of {{ totalPages }}</span>
+              <button
+                type="button"
+                class="page-button"
+                [disabled]="currentPage === 1"
+                (click)="goToPage(currentPage - 1)"
+                aria-label="Previous page"
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                class="page-button"
+                [disabled]="currentPage === totalPages"
+                (click)="goToPage(currentPage + 1)"
+                aria-label="Next page"
+              >
+                Next
+              </button>
+            </div>
+          </nav>
+        }
+        <p class="privacy-note">Participant information is confidential. Only use it for event administration.</p>
+      </section>
+    }
+  </section>
+</main>

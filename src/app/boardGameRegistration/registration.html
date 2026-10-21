@@ -1,0 +1,166 @@
+<main class="registration-page container py-4 py-md-5">
+  <section class="registration-card card shadow-sm mx-auto" aria-labelledby="event-title">
+    <header class="hero card-header border-0">
+      <span class="eyebrow">MAS EXECUTIVE COMMITTEE</span>
+      <h1 id="event-title">Board Games 2026</h1>
+      <p class="tagline">Think <span>•</span> Play <span>•</span> Compete <span>•</span> Connect</p>
+      <div class="event-details mt-4">
+        <p class="mb-2"><span aria-hidden="true">📅</span> 28 November 2026</p>
+        <p class="mb-0"><span aria-hidden="true">📍</span> Toynbee School, Bodycoats Road, Chandlers Ford, Eastleigh SO53 2PL</p>
+      </div>
+    </header>
+
+    <form class="form-body card-body p-3 p-md-4" #registrationForm="ngForm" (ngSubmit)="submit()">
+      @if (registrationComplete) {
+        <p class="message alert alert-success mb-0" role="status">{{ successMessage }}</p>
+      } @else {
+      <h2>Participant details</h2>
+      <p class="muted">One registration per participant. <span aria-hidden="true">*</span> Required fields.</p>
+      <div class="row g-3">
+      <div class="col-12">
+      <label class="field form-label mb-0">
+        Full name <span aria-hidden="true">*</span>
+        <input
+          name="name"
+          type="text"
+          class="form-control"
+          [(ngModel)]="name"
+          required
+          maxlength="120"
+          autocomplete="name"
+        />
+      </label>
+      </div>
+
+      <div class="col-12 col-md-6">
+        <label class="field form-label mb-0">
+          Age on event day <span aria-hidden="true">*</span>
+          <input
+            name="age"
+            type="number"
+            class="form-control"
+            [(ngModel)]="age"
+            (ngModelChange)="onAgeChange()"
+            min="8"
+            max="120"
+            required
+          />
+        </label>
+      </div>
+
+      <div class="col-12 col-md-6">
+        <label class="field form-label mb-0">
+          Contact number <span aria-hidden="true">*</span>
+          <input
+            name="phone"
+            type="tel"
+            class="form-control"
+            [(ngModel)]="phone"
+            required
+            maxlength="30"
+            autocomplete="tel"
+          />
+        </label>
+      </div>
+
+      <div class="col-12">
+      <label class="field form-label mb-0">
+        Email address <span class="optional">(optional)</span>
+        <input
+          name="email"
+          type="email"
+          class="form-control"
+          [(ngModel)]="email"
+          maxlength="254"
+          autocomplete="email"
+        />
+      </label>
+      </div>
+
+      @if (minor) {
+        <div class="col-12">
+        <label class="field form-label mb-0">
+          Parent / guardian name <span aria-hidden="true">*</span>
+          <input
+            name="guardian"
+            type="text"
+            class="form-control"
+            [(ngModel)]="guardian"
+            required
+            maxlength="120"
+            autocomplete="name"
+          />
+        </label>
+        </div>
+      }
+
+      <section class="games-section col-12" aria-labelledby="games-title">
+        <h2 id="games-title">Choose your games</h2>
+        <p class="muted">Select one or more games. Your category is assigned automatically based on age.</p>
+
+        @for (game of games; track game) {
+          <label class="game-option form-check">
+            <input
+              type="checkbox"
+              class="form-check-input"
+              [checked]="selectedGames.includes(game)"
+              (change)="toggleGame(game, $event)"
+            />
+            <span class="game-copy w-100 d-flex justify-content-between">
+              <strong>
+                @switch (game) {
+                  @case ('Carroms') { 🎯 Carroms }
+                  @case ('Chess') { ♟️ Chess }
+                  @case ('PlayStation') { 🎮 PlayStation }
+                }
+              </strong>
+              <span class="category">
+                @if (ageCategory) {
+                  Your category: {{ ageCategory }} years
+                } @else {
+                  8–13 <span aria-hidden="true">•</span> 14–17 <span aria-hidden="true">•</span> 18+ years
+                }
+              </span>
+            </span>
+          </label>
+        }
+
+        @if (age !== null && age >= 18) {
+          <label class="game-option form-check">
+            <input
+              type="checkbox"
+              class="form-check-input"
+              [checked]="selectedGames.includes('Cards')"
+              (change)="toggleGame('Cards', $event)"
+            />
+            <span class="game-copy w-100 d-flex justify-content-between">
+              <strong>🃏 Cards</strong>
+              <span class="category">18+ years only</span>
+            </span>
+          </label>
+        }
+      </section>
+
+      <div class="col-12">
+        <label class="consent form-check">
+          <input name="consent" class="form-check-input" type="checkbox" [(ngModel)]="consent" required />
+          <span class="form-check-label">I confirm the information is accurate and agree to MAS using these details to administer this event. <span aria-hidden="true">*</span></span>
+        </label>
+      </div>
+
+      @if (errorMessage) {
+        <div class="col-12">
+          <p class="message alert alert-danger mb-0" role="alert">{{ errorMessage }}</p>
+        </div>
+      }
+      <div class="col-12">
+        <button class="btn btn-success w-100" type="submit" [disabled]="submitting || registrationForm.invalid">
+          {{ submitting ? 'Submitting…' : 'Submit Registration' }}
+        </button>
+        <p class="privacy-note">Your details are securely submitted to MAS for event administration.</p>
+      </div>
+      </div>
+      }
+    </form>
+  </section>
+</main>

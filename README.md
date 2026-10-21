@@ -1,5 +1,45 @@
 # Mas
 
+MAS Board Games 2026 registration app, with a committee-only dashboard.
+
+## Registration and dashboard setup
+
+The server requires Node.js 22.12 or later. Configure these environment variables on the server before accepting registrations:
+
+| Variable | Purpose |
+| --- | --- |
+| `ADMIN_USERNAME` | Username for `/admin` |
+| `ADMIN_PASSWORD` | Strong password for `/admin` |
+| `SMTP_HOST` | SMTP server hostname |
+| `SMTP_PORT` | SMTP server port (defaults to `587`) |
+| `SMTP_SECURE` | Set to `true` when the SMTP server requires implicit TLS |
+| `SMTP_USER` | SMTP account username |
+| `SMTP_PASS` | SMTP account password or app password |
+| `SMTP_FROM` | Optional sender address (defaults to `SMTP_USER`) |
+| `REGISTRATION_ENCRYPTION_KEY` | Required 32-byte base64 key used to encrypt participant records |
+| `REGISTRATION_DB_PATH` | Optional SQLite database path (defaults to `data/registrations.sqlite`) |
+
+Generate the encryption key with `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"` and save it as a deployment secret. Back up this key separately and securely: losing it makes stored registrations unreadable.
+
+Registration emails are sent to `masouthampton@gmail.com`. If SMTP is not configured, the API rejects registrations instead of claiming they were submitted. If a notification fails after a registration is saved, the form reports that state and the dashboard shows a retry action.
+
+Participant details are encrypted in the SQLite database. The database is stored on the server's local disk, so production hosting must provide persistent storage for this file and must serve the site over HTTPS. Back up the database and encryption key securely. The admin dashboard is available at `/admin`.
+
+For local development, the SSR server reads secrets from an ignored `.env` file in the project root. Copy the generated admin credentials there as `ADMIN_USERNAME` and `ADMIN_PASSWORD`, and set `REGISTRATION_ENCRYPTION_KEY` to a 32-byte base64 key. To create a key:
+
+```bash
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
+```
+
+To run the SSR server after building, run:
+
+```bash
+npm run build
+npm run serve:ssr:mas
+```
+
+The Angular development server (`ng serve`) previews the form but does not run the registration API. The `.env` file is loaded by `npm run serve:ssr:mas`, not by `ng serve` or your hosting provider. For the public dashboard, configure these values as secrets in your hosting provider and redeploy/restart the server.
+
 This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 20.1.3.
 
 ## Development server

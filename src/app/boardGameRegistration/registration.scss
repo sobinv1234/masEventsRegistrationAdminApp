@@ -1,0 +1,225 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  background: #f1f5f2;
+  color: #20332e;
+  font-family: Arial, sans-serif;
+}
+
+.registration-page {
+  padding: 40px 16px;
+}
+
+.registration-card {
+  max-width: 720px;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid #dce5df;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 16px 48px rgb(22 69 56 / 8%);
+}
+
+.hero {
+  padding: 28px;
+  background: #164538;
+  color: #fff;
+}
+
+.eyebrow {
+  font-size: 12px;
+  letter-spacing: 2px;
+}
+
+h1 {
+  margin: 8px 0;
+  font-size: clamp(28px, 7vw, 36px);
+}
+
+.tagline {
+  margin: 0;
+  color: #e3efe8;
+}
+
+.tagline span {
+  color: #add8b9;
+}
+
+.event-details {
+  margin-top: 22px;
+  color: #e3efe8;
+}
+
+.event-details p {
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+
+.event-details span {
+  margin-right: 5px;
+}
+
+.form-body {
+  padding: 26px;
+}
+
+h2 {
+  margin: 0 0 8px;
+  color: #164538;
+  font-size: 21px;
+}
+
+.muted,
+.privacy-note {
+  color: #60736a;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.muted {
+  margin: 0 0 14px;
+}
+
+.field {
+  display: block;
+  margin: 16px 0;
+  font-weight: 600;
+}
+
+.field input {
+  display: block;
+  width: 100%;
+  margin-top: 7px;
+  padding: 12px;
+  border: 1px solid #b9cbc1;
+  border-radius: 8px;
+  background: #fff;
+  color: #20332e;
+  font: inherit;
+}
+
+.field input:focus-visible,
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid #8ab99a;
+  outline-offset: 2px;
+}
+
+.optional {
+  color: #60736a;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.games-section {
+  margin-top: 26px;
+}
+
+.game-option {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin: 10px 0;
+  padding: 14px;
+  border: 1px solid #d7e5dc;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.game-option.form-check {
+  padding-left: 14px;
+}
+
+.game-option:has(input:checked) {
+  border-color: #4b8862;
+  background: #f3f8f4;
+}
+
+.game-option input,
+.consent input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: #164538;
+}
+
+.game-option .form-check-input,
+.consent .form-check-input {
+  position: static;
+  flex: 0 0 18px;
+  margin: 2px 0 0;
+}
+
+.game-copy {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.category {
+  color: #436e56;
+  font-size: 13px;
+}
+
+.consent {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 22px 0;
+  line-height: 1.5;
+}
+
+.consent.form-check {
+  padding-left: 0;
+}
+
+button {
+  width: 100%;
+  padding: 15px 24px;
+  border: 0;
+  border-radius: 9px;
+  background: #164538;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.message {
+  padding: 12px;
+  border-radius: 8px;
+  line-height: 1.5;
+}
+
+.error {
+  background: #fff1f0;
+  color: #b42318;
+}
+
+.success {
+  background: #eaf5ee;
+  color: #164538;
+}
+
+.privacy-note {
+  margin: 12px 0 0;
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  .registration-page {
+    padding: 16px 10px;
+  }
+
+  .hero,
+  .form-body {
+    padding: 20px 16px;
+  }
+
+}

@@ -10,6 +10,7 @@
 /node_modules
 npm-debug.log
 yarn-error.log
+/.env
 
 # IDEs and editors
 .idea/
@@ -35,7 +36,8 @@ yarn-error.log
 /coverage
 /libpeerconnection.log
 testem.log
-/typings
+/data/
+typings
 
 # System files
 .DS_Store

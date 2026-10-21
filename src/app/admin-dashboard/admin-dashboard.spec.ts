@@ -1,0 +1,112 @@
+import { provideZonelessChangeDetection } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { AdminDashboard } from './admin-dashboard';
+
+describe('AdminDashboard filters', () => {
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [AdminDashboard],
+      providers: [provideZonelessChangeDetection()],
+    }).compileComponents();
+  });
+
+  it('combines text, age, game, and email-status filters', () => {
+    const fixture = TestBed.createComponent(AdminDashboard);
+    const dashboard = fixture.componentInstance;
+    dashboard['records'] = [
+      {
+        id: 'minor',
+        createdAt: '2026-10-01T10:00:00.000Z',
+        name: 'Alex Player',
+        age: 14,
+        phone: '07123456789',
+        email: 'alex@example.com',
+        guardian: 'Sam Guardian',
+        games: [{ game: 'Chess', category: '14–17' }],
+        emailSent: true,
+      },
+      {
+        id: 'adult',
+        createdAt: '2026-10-02T10:00:00.000Z',
+        name: 'Jordan Player',
+        age: 21,
+        phone: '07987654321',
+        email: '',
+        guardian: '',
+        games: [{ game: 'Cards', category: '18+' }],
+        emailSent: false,
+      },
+    ];
+
+    dashboard['ageFilter'] = '14-17';
+    dashboard['gameFilter'] = 'Chess';
+    dashboard['emailFilter'] = 'sent';
+    expect(dashboard['filteredRecords'].map((record) => record.id)).toEqual([
+      'minor',
+    ]);
+
+    dashboard['searchTerm'] = 'sam guardian';
+    expect(dashboard['filteredRecords'].map((record) => record.id)).toEqual([
+      'minor',
+    ]);
+
+    dashboard['searchTerm'] = 'jordan';
+    expect(dashboard['filteredRecords']).toEqual([]);
+  });
+
+  it('clears all filters', () => {
+    const fixture = TestBed.createComponent(AdminDashboard);
+    const dashboard = fixture.componentInstance;
+    dashboard['searchTerm'] = 'Chess';
+    dashboard['ageFilter'] = '14-17';
+    dashboard['gameFilter'] = 'Chess';
+    dashboard['emailFilter'] = 'pending';
+
+    dashboard['clearFilters']();
+
+    expect(dashboard['hasActiveFilters']).toBeFalse();
+    expect(dashboard['searchTerm']).toBe('');
+    expect(dashboard['ageFilter']).toBe('all');
+    expect(dashboard['gameFilter']).toBe('all');
+    expect(dashboard['emailFilter']).toBe('all');
+  });
+
+  it('paginates filtered registrations and resets to the first page when filters change', () => {
+    const fixture = TestBed.createComponent(AdminDashboard);
+    const dashboard = fixture.componentInstance;
+    dashboard['records'] = Array.from({ length: 23 }, (_, index) => ({
+      id: `record-${index + 1}`,
+      createdAt: '2026-10-01T10:00:00.000Z',
+      name: `Participant ${index + 1}`,
+      age: index < 12 ? 12 : 18,
+      phone: `070000000${index}`,
+      email: '',
+      guardian: '',
+      games: [
+        {
+          game: index < 12 ? 'Chess' : 'Cards',
+          category: index < 12 ? '8–13' : '18+',
+        },
+      ],
+      emailSent: true,
+    }));
+
+    expect(dashboard['paginatedRecords'].length).toBe(10);
+    expect(dashboard['firstVisibleRecord']).toBe(1);
+    expect(dashboard['lastVisibleRecord']).toBe(10);
+
+    dashboard['goToPage'](3);
+    expect(dashboard['paginatedRecords'].length).toBe(3);
+    expect(dashboard['firstVisibleRecord']).toBe(21);
+
+    dashboard['ageFilter'] = '8-13';
+    dashboard['onFiltersChanged']();
+    expect(dashboard['currentPage']).toBe(1);
+    expect(dashboard['filteredRecords'].length).toBe(12);
+    expect(dashboard['paginatedRecords'].length).toBe(10);
+    expect(dashboard['totalPages']).toBe(2);
+
+    dashboard['goToPage'](99);
+    expect(dashboard['currentPage']).toBe(2);
+  });
+});

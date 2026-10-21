@@ -1,0 +1,312 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  background: #f1f5f2;
+  color: #20332e;
+  font-family: Arial, sans-serif;
+}
+
+.dashboard-page {
+  padding: 40px 16px;
+}
+
+.dashboard-card {
+  max-width: 1180px;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid #dce5df;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 16px 48px rgb(22 69 56 / 8%);
+}
+
+.dashboard-header {
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  padding: 28px;
+  background: #164538;
+  color: #fff;
+}
+
+.eyebrow {
+  font-size: 12px;
+  letter-spacing: 2px;
+}
+
+h1 {
+  margin: 8px 0;
+  font-size: clamp(25px, 5vw, 34px);
+}
+
+.dashboard-header p {
+  margin: 0;
+  color: #e3efe8;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.login-form {
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+h2 {
+  margin: 0 0 8px;
+  color: #164538;
+}
+
+.login-form > p {
+  color: #60736a;
+  line-height: 1.5;
+}
+
+.login-form label {
+  display: block;
+  margin: 18px 0;
+  font-weight: 600;
+}
+
+.login-form input {
+  display: block;
+  width: 100%;
+  margin-top: 7px;
+  padding: 12px;
+  border: 1px solid #b9cbc1;
+  border-radius: 8px;
+  font: inherit;
+}
+
+button {
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 8px;
+  background: #164538;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.secondary {
+  border: 1px solid #b9cbc1;
+  background: transparent;
+  color: #fff;
+}
+
+.records {
+  padding: 26px;
+}
+
+.records-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.records-heading p {
+  margin: 6px 0 0;
+  color: #60736a;
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(140px, 1fr)) auto;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 16px;
+  border: 1px solid #dce5df;
+  border-radius: 10px;
+  background: #f8faf8;
+}
+
+.filters label {
+  display: block;
+  margin-bottom: 6px;
+  color: #436e56;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.filters input,
+.filters select {
+  min-height: 42px;
+}
+
+.clear-filters {
+  min-height: 42px;
+  white-space: nowrap;
+}
+
+.clear-filters:disabled {
+  opacity: 0.5;
+}
+
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.page-size-control,
+.page-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.page-size-control {
+  color: #436e56;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.page-size-control select {
+  width: auto;
+  min-width: 76px;
+}
+
+.page-count {
+  color: #60736a;
+  font-size: 13px;
+}
+
+.page-button {
+  padding: 9px 14px;
+}
+
+.page-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+th,
+td {
+  padding: 14px 12px;
+  border-bottom: 1px solid #e4ece6;
+  vertical-align: top;
+}
+
+th {
+  background: #f3f8f4;
+  color: #436e56;
+  font-size: 13px;
+}
+
+td > span {
+  display: block;
+  margin-top: 5px;
+}
+
+.game-chip {
+  width: fit-content;
+  padding: 5px 8px;
+  border-radius: 20px;
+  background: #edf5ef;
+  color: #164538;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.pending {
+  color: #b42318;
+  font-weight: 700;
+}
+
+.retry-button {
+  margin-top: 8px;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+
+.empty-state {
+  padding: 28px;
+  border-radius: 10px;
+  background: #f3f8f4;
+  text-align: center;
+}
+
+.privacy-note {
+  margin-top: 20px;
+  color: #60736a;
+  font-size: 13px;
+}
+
+.error {
+  color: #b42318;
+}
+
+@media (max-width: 620px) {
+  .dashboard-page {
+    padding: 16px 10px;
+  }
+
+  .dashboard-header,
+  .records {
+    padding: 20px 16px;
+  }
+
+  .dashboard-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .header-actions {
+    flex-wrap: wrap;
+  }
+
+  .records {
+    padding: 20px 12px;
+  }
+
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .clear-filters {
+    width: 100%;
+  }
+
+  .pagination-bar,
+  .page-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .page-size-control {
+    justify-content: space-between;
+  }
+
+  .page-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .page-count {
+    grid-column: 1 / -1;
+    text-align: center;
+  }
+}
