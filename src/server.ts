@@ -628,48 +628,6 @@ function buildParticipantConfirmationEmail(registration: Registration): string {
   ].join('\n');
 }
 
-function buildParticipantConfirmationSms(registration: Registration): string {
-  const firstName = registration.name.trim().split(/\s+/)[0];
-  return `MAS: Thanks, ${firstName}. Board Games 2026: 28 Nov 2026, 12:00 PM-5:00 PM at Toynbee School, Bodycoats Rd, Chandlers Ford, Eastleigh SO53 2PL.`;
-}
-
-function toInternationalPhoneNumber(phone: string): string {
-  const compact = phone.replace(/[\s().-]/g, '');
-  if (compact.startsWith('+')) {
-    return compact;
-  }
-  if (compact.startsWith('00')) {
-    return `+${compact.slice(2)}`;
-  }
-  if (compact.startsWith('0')) {
-    return `+44${compact.slice(1)}`;
-  }
-  return `+${compact}`;
-}
-
-async function sendParticipantConfirmationSms(registration: Registration): Promise<void> {
-  const body = new URLSearchParams({
-    phone: toInternationalPhoneNumber(registration.phone),
-    message: buildParticipantConfirmationSms(registration),
-    key: 'textbelt',
-  });
-  const response = await fetch('https://textbelt.com/text', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-    signal: AbortSignal.timeout(10_000),
-  });
-  let result: { success?: boolean; error?: string };
-  try {
-    result = await response.json();
-  } catch {
-    throw new Error(`The SMS provider returned an invalid response (HTTP ${response.status}).`);
-  }
-  if (!response.ok || result.success !== true) {
-    throw new Error(result.error || `The SMS provider returned HTTP ${response.status}.`);
-  }
-}
-
 function adminAuthentication(
   req: Request,
   res: Response,
@@ -812,7 +770,7 @@ app.post('/api/registrations', async (req, res, next) => {
       return;
     }
 
-    const confirmationFailures: string[] = [];
+    let confirmationEmailSent = false;
     if (registration.email) {
       try {
         await transporter.sendMail({
@@ -821,22 +779,16 @@ app.post('/api/registrations', async (req, res, next) => {
           subject: 'Your MAS Board Games 2026 registration',
           text: buildParticipantConfirmationEmail(savedRegistration),
         });
+        confirmationEmailSent = true;
       } catch (error) {
         console.error(`Participant confirmation email failed for registration ${id}.`, error);
-        confirmationFailures.push('confirmation email');
       }
-    }
-    try {
-      await sendParticipantConfirmationSms(savedRegistration);
-    } catch (error) {
-      console.error(`Participant confirmation SMS failed for registration ${id}.`, error);
-      confirmationFailures.push('SMS');
     }
 
     const message =
-      confirmationFailures.length > 0
-        ? `Thank you, ${registration.name}! Your registration has been saved and MAS notified, but we could not send your ${confirmationFailures.join(' and ')}. The free SMS service allows one text per day. Please check your details and contact masouthampton@gmail.com if needed.`
-        : `Thank you, ${registration.name}! Your registration has been submitted to MAS. A confirmation SMS${registration.email ? ' and email' : ''} has been sent with the event time and location.`;
+      registration.email && !confirmationEmailSent
+        ? `Thank you, ${registration.name}! Your registration has been saved and MAS notified, but we could not send your confirmation email. Please contact masouthampton@gmail.com if you need the event details.`
+        : `Thank you, ${registration.name}! Your registration has been submitted to MAS.${confirmationEmailSent ? ' A confirmation email with the event time and location has been sent.' : ''}`;
     res.status(201).json({ message });
   } catch (error) {
     next(error);

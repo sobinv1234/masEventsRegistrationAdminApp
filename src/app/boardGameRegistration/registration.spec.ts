@@ -72,17 +72,17 @@ describe('Registration', () => {
     ).toBeTrue();
   });
 
-  it('displays the event time and notification consent', async () => {
+  it('displays the event time and email-only notification consent', async () => {
     const fixture = TestBed.createComponent(Registration);
     fixture.detectChanges();
     await fixture.whenStable();
 
     expect(fixture.nativeElement.textContent).toContain('12:00 PM–5:00 PM UK time');
     expect(fixture.nativeElement.textContent).toContain(
-      'registration confirmation by SMS and by email if provided',
+      'registration confirmation by email if provided',
     );
     expect(fixture.nativeElement.textContent).toContain(
-      'free key is limited to one text per day',
+      'No SMS messages are sent',
     );
   });
 });

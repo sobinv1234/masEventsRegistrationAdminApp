@@ -166,7 +166,7 @@
       <div class="col-12">
         <label class="consent form-check">
           <input name="consent" class="form-check-input" type="checkbox" [(ngModel)]="consent" required />
-          <span class="form-check-label">I confirm the information is accurate and agree to MAS using these details to administer this event, including a registration confirmation by SMS and by email if provided. <span aria-hidden="true">*</span></span>
+          <span class="form-check-label">I confirm the information is accurate and agree to MAS using these details to administer this event and send a registration confirmation by email if provided. <span aria-hidden="true">*</span></span>
         </label>
       </div>
       @if (errorMessage) {
@@ -178,7 +178,7 @@
         <button class="btn btn-success w-100" type="submit" [disabled]="submitting || registrationForm.invalid">
           {{ submitting ? 'Submitting…' : 'Submit Registration' }}
         </button>
-        <p class="privacy-note">Your details are submitted securely to MAS. Your mobile number is sent to Textbelt to deliver the confirmation SMS; its free key is limited to one text per day, so SMS delivery is not guaranteed.</p>
+        <p class="privacy-note">Your details are submitted securely to MAS. No SMS messages are sent.</p>
       </div>
       </div>
       }
