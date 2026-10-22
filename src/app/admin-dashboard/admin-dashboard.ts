@@ -9,6 +9,7 @@ type RegistrationRecord = {
   phone: string;
   email: string;
   guardian: string;
+  paymentConfirmed?: boolean;
   games: { game: string; category: string }[];
   emailSent: boolean;
 };
@@ -429,6 +430,7 @@ export class AdminDashboard {
         'Contact number',
         'Email address',
         'Parent / guardian',
+        '£5 fee payment declaration',
         'Games and categories',
         'Submitted at (UTC)',
         'Email status',
@@ -439,6 +441,7 @@ export class AdminDashboard {
         record.phone,
         record.email,
         record.guardian,
+        record.paymentConfirmed ? 'Participant confirmed (verify)' : 'Not confirmed',
         record.games.map(({ game, category }) => `${game} (${category})`).join('; '),
         record.createdAt,
         record.emailSent ? 'Sent' : 'Not sent',

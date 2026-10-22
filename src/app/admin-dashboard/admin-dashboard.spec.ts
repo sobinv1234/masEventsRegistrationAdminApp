@@ -22,6 +22,7 @@ describe('AdminDashboard filters', () => {
         phone: '07123456789',
         email: 'alex@example.com',
         guardian: 'Sam Guardian',
+        paymentConfirmed: true,
         games: [{ game: 'Chess', category: '14–17' }],
         emailSent: true,
       },
@@ -33,6 +34,7 @@ describe('AdminDashboard filters', () => {
         phone: '07987654321',
         email: '',
         guardian: '',
+        paymentConfirmed: false,
         games: [{ game: 'Cards', category: '18+' }],
         emailSent: false,
       },
@@ -83,6 +85,7 @@ describe('AdminDashboard filters', () => {
         phone: '07123456789',
         email: 'alex@example.com',
         guardian: 'Sam, Guardian',
+        paymentConfirmed: true,
         games: [{ game: 'Chess', category: '14–17' }],
         emailSent: true,
       },
@@ -95,6 +98,7 @@ describe('AdminDashboard filters', () => {
     expect(csv).toContain('"Participant name","Age","Contact number"');
     expect(csv).toContain('"\'=HYPERLINK(""https://example.com"")"');
     expect(csv).toContain('"Sam, Guardian"');
+    expect(csv).toContain('"Participant confirmed (verify)"');
     expect(csv).toContain('"Chess (14–17)"');
     expect(csv).toContain('"Sent"');
   });

@@ -141,13 +141,34 @@
         }
       </section>
 
+      <section class="payment-section col-12" aria-labelledby="payment-title">
+        <h2 id="payment-title">Registration fee</h2>
+        <p><strong>£5 per participant</strong> — one fee covers all games selected for the participant's age category.</p>
+        <p class="muted">Please pay by bank transfer before submitting this form. MAS will verify payments separately.</p>
+        <dl class="payment-details">
+          <div><dt>Bank</dt><dd>Barclays</dd></div>
+          <div><dt>Account name</dt><dd>Malayalee Association of Southampton</dd></div>
+          <div><dt>Sort code</dt><dd>20-79-31</dd></div>
+          <div><dt>Account number</dt><dd>43328074</dd></div>
+          <div><dt>Payment reference</dt><dd>Participant's full name</dd></div>
+        </dl>
+        <label class="consent form-check">
+          <input
+            name="paymentConfirmed"
+            class="form-check-input"
+            type="checkbox"
+            [(ngModel)]="paymentConfirmed"
+            required
+          />
+          <span class="form-check-label">I confirm that the £5 registration fee has been transferred for this participant. <span aria-hidden="true">*</span></span>
+        </label>
+      </section>
       <div class="col-12">
         <label class="consent form-check">
           <input name="consent" class="form-check-input" type="checkbox" [(ngModel)]="consent" required />
           <span class="form-check-label">I confirm the information is accurate and agree to MAS using these details to administer this event. <span aria-hidden="true">*</span></span>
         </label>
       </div>
-
       @if (errorMessage) {
         <div class="col-12">
           <p class="message alert alert-danger mb-0" role="alert">{{ errorMessage }}</p>

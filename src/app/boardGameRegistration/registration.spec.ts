@@ -55,4 +55,20 @@ describe('Registration', () => {
       );
     }
   });
+
+  it('shows one £5 fee per participant and requires payment confirmation', async () => {
+    const fixture = TestBed.createComponent(Registration);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(fixture.nativeElement.querySelector('.payment-section')?.textContent).toContain(
+      '£5 per participant',
+    );
+    expect(fixture.nativeElement.querySelector('.payment-section')?.textContent).toContain(
+      'one fee covers all games',
+    );
+    expect(
+      fixture.nativeElement.querySelector('input[name="paymentConfirmed"]')?.required,
+    ).toBeTrue();
+  });
 });

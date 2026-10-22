@@ -18,6 +18,7 @@ export class Registration {
   protected email = '';
   protected guardian = '';
   protected consent = false;
+  protected paymentConfirmed = false;
   protected selectedGames: Game[] = [];
   protected submitting = false;
   protected registrationComplete = false;
@@ -84,6 +85,7 @@ export class Registration {
           guardian: this.minor ? this.guardian.trim() : '',
           games: this.selectedGames,
           consent: this.consent,
+          paymentConfirmed: this.paymentConfirmed,
         }),
       });
       let result: { message?: string; registrationSaved?: boolean };
@@ -130,6 +132,7 @@ export class Registration {
     this.email = '';
     this.guardian = '';
     this.consent = false;
+    this.paymentConfirmed = false;
     this.selectedGames = [];
   }
 }

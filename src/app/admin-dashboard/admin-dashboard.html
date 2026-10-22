@@ -190,6 +190,7 @@
                   <th>Games</th>
                   <th>Contact</th>
                   <th>Parent / guardian</th>
+                  <th>£5 fee payment</th>
                   <th>Submitted</th>
                   <th>Email status</th>
                   <th>Actions</th>
@@ -214,6 +215,13 @@
                       }
                     </td>
                     <td>{{ record.guardian || '—' }}</td>
+                    <td>
+                      @if (record.paymentConfirmed) {
+                        <span>Participant confirmed; verify payment</span>
+                      } @else {
+                        <span class="pending">Not confirmed</span>
+                      }
+                    </td>
                     <td>{{ formatDate(record.createdAt) }}</td>
                     <td>
                       @if (record.emailSent) {

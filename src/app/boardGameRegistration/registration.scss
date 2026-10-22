@@ -115,6 +115,38 @@ input:focus-visible {
   margin-top: 26px;
 }
 
+.payment-section {
+  margin-top: 10px;
+  padding: 18px;
+  border: 1px solid #d7e5dc;
+  border-radius: 10px;
+  background: #f8fbf8;
+}
+
+.payment-section > p {
+  margin: 8px 0;
+}
+
+.payment-details {
+  margin: 16px 0;
+}
+
+.payment-details div {
+  display: flex;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #e3ebe5;
+}
+
+.payment-details dt {
+  flex: 0 0 130px;
+}
+
+.payment-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .game-option {
   display: flex;
   gap: 12px;
@@ -222,4 +254,11 @@ button:disabled {
     padding: 20px 16px;
   }
 
+  .payment-details div {
+    display: block;
+  }
+
+  .payment-details dd {
+    margin-top: 3px;
+  }
 }

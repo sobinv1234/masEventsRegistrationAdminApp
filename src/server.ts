@@ -32,6 +32,7 @@ type Registration = {
   phone: string;
   email: string;
   guardian: string;
+  paymentConfirmed: boolean;
   games: GameChoice[];
   emailSent: boolean;
 };
@@ -401,7 +402,7 @@ function validateRegistration(value: unknown):
   if (!isRecord(value)) {
     return { valid: false, message: 'Registration details are missing or invalid.' };
   }
-  const { name, age, phone, email, guardian, games, consent } = value;
+  const { name, age, phone, email, guardian, games, consent, paymentConfirmed } = value;
   const emailValue = email === undefined ? '' : email;
   const guardianValue = guardian === undefined ? '' : guardian;
   if (!validPersonName(name)) {
@@ -448,6 +449,12 @@ function validateRegistration(value: unknown):
   if (consent !== true) {
     return { valid: false, message: 'Consent is required to submit a registration.' };
   }
+  if (paymentConfirmed !== true) {
+    return {
+      valid: false,
+      message: 'Please confirm the £5 registration fee has been paid for this participant.',
+    };
+  }
 
   return {
     valid: true,
@@ -457,6 +464,7 @@ function validateRegistration(value: unknown):
       phone: phone.trim(),
       email: emailValue.trim(),
       guardian: age < 18 ? guardianName : '',
+      paymentConfirmed,
       games: selectedGames,
     },
   };
@@ -552,6 +560,8 @@ function decryptRegistration(
     typeof value['phone'] !== 'string' ||
     typeof value['email'] !== 'string' ||
     typeof value['guardian'] !== 'string' ||
+    (value['paymentConfirmed'] !== undefined &&
+      typeof value['paymentConfirmed'] !== 'boolean') ||
     !Array.isArray(value['games'])
   ) {
     throw new Error('Stored registration data is invalid.');
@@ -574,6 +584,7 @@ function decryptRegistration(
     phone: value['phone'],
     email: value['email'],
     guardian: value['guardian'],
+    paymentConfirmed: value['paymentConfirmed'] === true,
     games,
     emailSent,
   };
@@ -591,6 +602,8 @@ function buildRegistrationEmail(registration: Registration): string {
     `Contact number: ${registration.phone}`,
     `Email: ${registration.email || 'Not provided'}`,
     `Parent / guardian: ${registration.guardian || 'Not applicable'}`,
+    `Registration fee: £5 per participant`,
+    `Payment confirmation: ${registration.paymentConfirmed ? 'Participant confirmed bank transfer; verify against bank records' : 'Not confirmed'}`,
     '',
     'Selected games:',
     gameList,
