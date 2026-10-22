@@ -23,7 +23,7 @@ The server requires Node.js 22.12 or later (Vercel is pinned to Node.js 22). Con
 
 Generate the encryption key with `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"` and save it as a deployment secret. Back up this key separately and securely: losing it makes stored registrations unreadable.
 
-Registration emails are sent to `masouthampton@gmail.com`. If SMTP is not configured, the API rejects registrations instead of claiming they were submitted. If a notification fails after a registration is saved, the form reports that state and the dashboard shows a retry action.
+Registration notifications are sent to `masouthampton@gmail.com`. Participants receive a confirmation email when they provide an email address and a confirmation SMS through Textbelt. The app uses Textbelt's free `textbelt` key, which is limited to one text per day; SMS delivery is therefore not guaranteed. UK phone numbers are converted to international format for delivery. The participant consent checkbox covers these event-administration confirmations. Textbelt receives the participant's mobile number and SMS content; review [Textbelt's privacy policy](https://textbelt.com/privacy/) before using this service with participant data. If a participant confirmation fails after registration is saved, the form reports the failure. If the committee email fails, the form reports that the registration was saved and the dashboard shows a retry action.
 
 Participant details are encrypted before storage. Local development uses SQLite; when `DATABASE_URL` is set, the app uses Neon Postgres and creates its registrations table automatically. Back up the database and encryption key securely. The admin dashboard is available at `/admin`.
 

@@ -71,4 +71,18 @@ describe('Registration', () => {
       fixture.nativeElement.querySelector('input[name="paymentConfirmed"]')?.required,
     ).toBeTrue();
   });
+
+  it('displays the event time and notification consent', async () => {
+    const fixture = TestBed.createComponent(Registration);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(fixture.nativeElement.textContent).toContain('12:00 PM–5:00 PM UK time');
+    expect(fixture.nativeElement.textContent).toContain(
+      'registration confirmation by SMS and by email if provided',
+    );
+    expect(fixture.nativeElement.textContent).toContain(
+      'free key is limited to one text per day',
+    );
+  });
 });
