@@ -25,6 +25,8 @@ Generate the encryption key with `node -e "console.log(require('node:crypto').ra
 
 Registration notifications are emailed to `masouthampton@gmail.com`. Participants receive a confirmation email with the event time and location when they provide an email address. SMS notifications are not sent. If a participant confirmation email fails after registration is saved, the form reports the failure. If the committee notification email fails, the form reports that the registration was saved and the dashboard shows a retry action.
 
+The registration form requires a membership number; participants must use it as the bank transfer reference. A matching member name is looked up when the number is entered; when multiple names share a number, participants choose the correct name from a dropdown. A single matching name is autofilled and can be edited. Entering a roster mobile number also looks up the member and fills the membership number and name. UK mobile numbers are matched consistently whether entered with a leading `0`, the `+44` country code, or without a country prefix. The lookup directory is generated from the April 2026 membership roster in `src/membership-directory.ts`; update it when the roster changes. The number is included in the admin dashboard and registration download.
+
 Participant details are encrypted before storage. Local development uses SQLite; when `DATABASE_URL` is set, the app uses Neon Postgres and creates its registrations table automatically. Back up the database and encryption key securely. The admin dashboard is available at `/admin`.
 
 ## Vercel deployment

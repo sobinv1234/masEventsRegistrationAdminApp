@@ -18,6 +18,7 @@ describe('AdminDashboard filters', () => {
         id: 'minor',
         createdAt: '2026-10-01T10:00:00.000Z',
         name: 'Alex Player',
+        membershipNumber: 'MAS-0012',
         age: 14,
         phone: '07123456789',
         email: 'alex@example.com',
@@ -43,6 +44,11 @@ describe('AdminDashboard filters', () => {
     dashboard['ageFilter'] = '14-17';
     dashboard['gameFilter'] = 'Chess';
     dashboard['emailFilter'] = 'sent';
+    expect(dashboard['filteredRecords'].map((record) => record.id)).toEqual([
+      'minor',
+    ]);
+
+    dashboard['searchTerm'] = 'mas-0012';
     expect(dashboard['filteredRecords'].map((record) => record.id)).toEqual([
       'minor',
     ]);
@@ -73,6 +79,32 @@ describe('AdminDashboard filters', () => {
     expect(dashboard['emailFilter']).toBe('all');
   });
 
+  it('shows the membership number in the registration table', () => {
+    const fixture = TestBed.createComponent(AdminDashboard);
+    const dashboard = fixture.componentInstance;
+    dashboard['loggedIn'] = true;
+    dashboard['records'] = [
+      {
+        id: 'membership-display',
+        createdAt: '2026-10-01T10:00:00.000Z',
+        name: 'Alex Player',
+        membershipNumber: 'MAS-0012',
+        age: 14,
+        phone: '07123456789',
+        email: '',
+        guardian: 'Sam Guardian',
+        games: [{ game: 'Chess', category: '14–17' }],
+        emailSent: true,
+      },
+    ];
+
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('table')?.textContent).toContain(
+      'MAS-0012',
+    );
+  });
+
   it('creates an Excel-compatible CSV containing all registrations with safe escaped cells', () => {
     const fixture = TestBed.createComponent(AdminDashboard);
     const dashboard = fixture.componentInstance;
@@ -81,6 +113,7 @@ describe('AdminDashboard filters', () => {
         id: 'export-record',
         createdAt: '2026-10-01T10:00:00.000Z',
         name: '=HYPERLINK("https://example.com")',
+        membershipNumber: 'MAS-0012',
         age: 14,
         phone: '07123456789',
         email: 'alex@example.com',
@@ -95,7 +128,8 @@ describe('AdminDashboard filters', () => {
     const csv = dashboard['buildCsv']();
 
     expect(csv.split('\r\n').length).toBe(2);
-    expect(csv).toContain('"Participant name","Age","Contact number"');
+    expect(csv).toContain('"Participant name","Membership number","Age","Contact number"');
+    expect(csv).toContain('"MAS-0012"');
     expect(csv).toContain('"\'=HYPERLINK(""https://example.com"")"');
     expect(csv).toContain('"Sam, Guardian"');
     expect(csv).toContain('"Participant confirmed (verify)"');

@@ -18,6 +18,7 @@ import { dirname, join, resolve } from 'node:path';
 import type { DatabaseSync as SqliteDatabase } from 'node:sqlite';
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import nodemailer, { type Transporter } from 'nodemailer';
+import { membershipDirectory } from './membership-directory';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
 const require = createRequire(import.meta.url);
@@ -28,6 +29,7 @@ type Registration = {
   id: string;
   createdAt: string;
   name: string;
+  membershipNumber: string;
   age: number;
   phone: string;
   email: string;
@@ -386,6 +388,19 @@ function validPersonName(value: unknown): value is string {
   );
 }
 
+function normalizePhoneNumber(value: string): string {
+  let digits = value.replace(/\D/g, '');
+  if (digits.startsWith('0044')) {
+    digits = digits.slice(4);
+    return `0${digits}`;
+  }
+  if (digits.startsWith('44')) {
+    digits = digits.slice(2);
+    return `0${digits}`;
+  }
+  return digits.startsWith('0') ? digits : `0${digits}`;
+}
+
 function getCategory(age: number): string {
   if (age <= 13) {
     return '8–13';
@@ -402,11 +417,29 @@ function validateRegistration(value: unknown):
   if (!isRecord(value)) {
     return { valid: false, message: 'Registration details are missing or invalid.' };
   }
-  const { name, age, phone, email, guardian, games, consent, paymentConfirmed } = value;
+  const {
+    name,
+    membershipNumber,
+    age,
+    phone,
+    email,
+    guardian,
+    games,
+    consent,
+    paymentConfirmed,
+  } = value;
   const emailValue = email === undefined ? '' : email;
   const guardianValue = guardian === undefined ? '' : guardian;
   if (!validPersonName(name)) {
     return { valid: false, message: 'Enter a valid participant name.' };
+  }
+  if (
+    typeof membershipNumber !== 'string' ||
+    membershipNumber.trim().length === 0 ||
+    membershipNumber.trim().length > 50 ||
+    /[\u0000-\u001f\u007f]/.test(membershipNumber)
+  ) {
+    return { valid: false, message: 'Enter a valid membership number.' };
   }
   if (typeof age !== 'number' || !Number.isInteger(age) || age < 8 || age > 120) {
     return { valid: false, message: 'Participant age must be between 8 and 120.' };
@@ -460,6 +493,7 @@ function validateRegistration(value: unknown):
     valid: true,
     registration: {
       name: name.trim(),
+      membershipNumber: membershipNumber.trim(),
       age,
       phone: phone.trim(),
       email: emailValue.trim(),
@@ -556,6 +590,8 @@ function decryptRegistration(
     typeof value['id'] !== 'string' ||
     typeof value['createdAt'] !== 'string' ||
     typeof value['name'] !== 'string' ||
+    (value['membershipNumber'] !== undefined &&
+      typeof value['membershipNumber'] !== 'string') ||
     typeof value['age'] !== 'number' ||
     typeof value['phone'] !== 'string' ||
     typeof value['email'] !== 'string' ||
@@ -580,6 +616,8 @@ function decryptRegistration(
     id: value['id'],
     createdAt: value['createdAt'],
     name: value['name'],
+    membershipNumber:
+      typeof value['membershipNumber'] === 'string' ? value['membershipNumber'] : '',
     age: value['age'],
     phone: value['phone'],
     email: value['email'],
@@ -598,6 +636,7 @@ function buildRegistrationEmail(registration: Registration): string {
     'A new MAS Board Games 2026 registration has been submitted.',
     '',
     `Name: ${registration.name}`,
+    `Membership number: ${registration.membershipNumber}`,
     `Age on event day: ${registration.age}`,
     `Contact number: ${registration.phone}`,
     `Email: ${registration.email || 'Not provided'}`,
@@ -793,6 +832,58 @@ app.post('/api/registrations', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+app.post('/api/membership-lookup', (req, res) => {
+  if (!isRecord(req.body) || typeof req.body['membershipNumber'] !== 'string') {
+    res.status(400).json({ message: 'Enter a valid membership number.' });
+    return;
+  }
+
+  const membershipNumber = req.body['membershipNumber'].trim();
+  if (!membershipNumber || membershipNumber.length > 50) {
+    res.status(400).json({ message: 'Enter a valid membership number.' });
+    return;
+  }
+
+  const normalizedMembershipNumber = membershipNumber.replace(/^0+(?=\d)/, '');
+  if (!Object.hasOwn(membershipDirectory, normalizedMembershipNumber)) {
+    res.status(404).json({ message: 'No member found for that number.' });
+    return;
+  }
+
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ names: membershipDirectory[normalizedMembershipNumber].names });
+});
+
+app.post('/api/membership-phone-lookup', (req, res) => {
+  if (!isRecord(req.body) || typeof req.body['phone'] !== 'string') {
+    res.status(400).json({ message: 'Enter a valid mobile number.' });
+    return;
+  }
+
+  const normalizedPhone = normalizePhoneNumber(req.body['phone']);
+  if (normalizedPhone.length < 7 || normalizedPhone.length > 15) {
+    res.status(400).json({ message: 'Enter a valid mobile number.' });
+    return;
+  }
+
+  const matches = Object.entries(membershipDirectory)
+    .filter(
+      ([, member]) =>
+        member.phone && normalizePhoneNumber(member.phone) === normalizedPhone,
+    )
+    .map(([membershipNumber, member]) => ({
+      membershipNumber,
+      names: member.names,
+    }));
+
+  res.setHeader('Cache-Control', 'no-store');
+  if (matches.length === 0) {
+    res.status(404).json({ message: 'No member found for that mobile number.' });
+    return;
+  }
+  res.json({ matches });
 });
 
 app.get('/api/admin/registrations', adminAuthentication, async (_req, res, next) => {

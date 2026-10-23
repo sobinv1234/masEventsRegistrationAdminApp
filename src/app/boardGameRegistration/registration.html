@@ -17,18 +17,102 @@
       <h2>Participant details</h2>
       <p class="muted">One registration per participant. <span aria-hidden="true">*</span> Required fields.</p>
       <div class="row g-3">
-      <div class="col-12">
+
+
+      <div class="col-12 col-md-6">
+        <label class="field form-label mb-0">
+          Contact number <span aria-hidden="true">*</span>
+          <input
+            name="phone"
+            type="tel"
+            class="form-control"
+            [(ngModel)]="phone"
+            (ngModelChange)="onPhoneChange()"
+            (blur)="lookupMembershipByPhone()"
+            required
+            maxlength="30"
+            autocomplete="tel"
+          />
+          <span class="optional">
+            Enter your member mobile number to find your name and membership number.
+          </span>
+          @if (phoneLookupLoading) {
+            <span class="optional" role="status">Looking up mobile number…</span>
+          } @else if (phoneLookupMessage) {
+            <span class="optional" role="status" aria-live="polite">
+              {{ phoneLookupMessage }}
+            </span>
+          }
+          @if (phoneLookupMatches.length > 1) {
+            <select
+              name="phoneMember"
+              class="form-select dropdown-name"
+              (ngModelChange)="onPhoneMemberSelected($event)"
+              ngModel
+            >
+              <option value="" disabled selected>Choose a member</option>
+              @for (match of phoneLookupMatches; track match.membershipNumber) {
+                <option [value]="match.membershipNumber">
+                  {{ match.names.join(', ') }} — {{ match.membershipNumber }}
+                </option>
+              }
+            </select>
+          }
+        </label>
+      </div>
+
+
+      <div class="col-12 col-md-6">
+        <label class="field form-label mb-0">
+          Membership number <span aria-hidden="true">*</span>
+          <input
+            name="membershipNumber"
+            type="text"
+            class="form-control"
+            [(ngModel)]="membershipNumber"
+            (ngModelChange)="onMembershipNumberChange()"
+            (blur)="lookupMembershipNumber()"
+            required
+            maxlength="50"
+            autocomplete="off"
+          />
+          @if (membershipLookupLoading) {
+            <span class="optional" role="status">Looking up membership number…</span>
+          } @else if (membershipLookupMessage) {
+            <span class="optional" role="status" aria-live="polite">
+              {{ membershipLookupMessage }}
+            </span>
+          }
+        </label>
+      </div>
+
+      <div class="col-12 col-md-6">
       <label class="field form-label mb-0">
         Full name <span aria-hidden="true">*</span>
-        <input
-          name="name"
-          type="text"
-          class="form-control"
-          [(ngModel)]="name"
-          required
-          maxlength="120"
-          autocomplete="name"
-        />
+        @if (membershipNames.length > 1) {
+          <select
+            name="name"
+            class="form-select dropdown-name"
+            [(ngModel)]="name"
+            (ngModelChange)="onMemberNameSelected()"
+            required
+          >
+            <option value="" disabled>Choose a name</option>
+            @for (memberName of membershipNames; track memberName) {
+              <option [value]="memberName">{{ memberName }}</option>
+            }
+          </select>
+        } @else {
+          <input
+            name="name"
+            type="text"
+            class="form-control"
+            [(ngModel)]="name"
+            required
+            maxlength="120"
+            autocomplete="name"
+          />
+        }
       </label>
       </div>
 
@@ -44,21 +128,6 @@
             min="8"
             max="120"
             required
-          />
-        </label>
-      </div>
-
-      <div class="col-12 col-md-6">
-        <label class="field form-label mb-0">
-          Contact number <span aria-hidden="true">*</span>
-          <input
-            name="phone"
-            type="tel"
-            class="form-control"
-            [(ngModel)]="phone"
-            required
-            maxlength="30"
-            autocomplete="tel"
           />
         </label>
       </div>
@@ -145,12 +214,13 @@
         <h2 id="payment-title">Registration fee</h2>
         <p><strong>£5 per participant</strong> — one fee covers all games selected for the participant's age category.</p>
         <p class="muted">Please pay by bank transfer before submitting this form. MAS will verify payments separately.</p>
+        <p class="muted">Use your membership number as the bank transfer reference.</p>
         <dl class="payment-details">
           <div><dt>Bank</dt><dd>Barclays</dd></div>
           <div><dt>Account name</dt><dd>Malayalee Association of Southampton</dd></div>
           <div><dt>Sort code</dt><dd>20-79-31</dd></div>
           <div><dt>Account number</dt><dd>43328074</dd></div>
-          <div><dt>Payment reference</dt><dd>Participant's full name</dd></div>
+          <div><dt>Payment reference</dt><dd>Membership number</dd></div>
         </dl>
         <label class="consent form-check">
           <input
@@ -175,7 +245,11 @@
         </div>
       }
       <div class="col-12">
-        <button class="btn btn-success w-100" type="submit" [disabled]="submitting || registrationForm.invalid">
+        <button
+          class="btn btn-success w-100"
+          type="submit"
+          [disabled]="submitting || registrationForm.invalid || !membershipNumberValid || membershipLookupLoading || phoneLookupLoading"
+        >
           {{ submitting ? 'Submitting…' : 'Submit Registration' }}
         </button>
         <p class="privacy-note">Your details are submitted securely to MAS. No SMS messages are sent.</p>

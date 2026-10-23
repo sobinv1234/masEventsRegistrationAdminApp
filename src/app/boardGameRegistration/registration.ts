@@ -2,6 +2,7 @@ import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 type Game = 'Carroms' | 'Chess' | 'PlayStation' | 'Cards';
+type MembershipPhoneMatch = { membershipNumber: string; names: string[] };
 
 @Component({
   selector: 'app-registration',
@@ -13,6 +14,14 @@ export class Registration {
   private readonly changeDetector = inject(ChangeDetectorRef);
   protected readonly games: Game[] = ['Carroms', 'Chess', 'PlayStation'];
   protected name = '';
+  protected membershipNumber = '';
+  protected membershipNames: string[] = [];
+  protected membershipNumberValid = false;
+  protected membershipLookupLoading = false;
+  protected membershipLookupMessage = '';
+  protected phoneLookupMatches: MembershipPhoneMatch[] = [];
+  protected phoneLookupLoading = false;
+  protected phoneLookupMessage = '';
   protected age: number | null = null;
   protected phone = '';
   protected email = '';
@@ -24,6 +33,12 @@ export class Registration {
   protected registrationComplete = false;
   protected errorMessage = '';
   protected successMessage = '';
+  private lastLookedUpMembershipNumber = '';
+  private lastAutofilledName = '';
+  private membershipLookupRequest = 0;
+  private lastPhoneLookup = '';
+  private lastPhoneMembershipNumber = '';
+  private phoneLookupRequest = 0;
 
   protected get minor(): boolean {
     return this.age !== null && this.age < 18;
@@ -51,6 +66,236 @@ export class Registration {
     }
   }
 
+  protected onMembershipNumberChange(): void {
+    this.membershipNumberValid = false;
+    this.lastLookedUpMembershipNumber = '';
+    this.membershipNames = [];
+    this.membershipLookupMessage = '';
+    this.membershipLookupLoading = false;
+    this.membershipLookupRequest += 1;
+    if (this.lastAutofilledName && this.name === this.lastAutofilledName) {
+      this.name = '';
+    }
+    this.lastAutofilledName = '';
+  }
+
+  protected onPhoneChange(): void {
+    this.phoneLookupRequest += 1;
+    this.phoneLookupMatches = [];
+    this.phoneLookupLoading = false;
+    this.phoneLookupMessage = '';
+    this.lastPhoneLookup = '';
+
+    if (
+      this.lastPhoneMembershipNumber &&
+      this.membershipNumber === this.lastPhoneMembershipNumber
+    ) {
+      this.membershipNumber = '';
+      this.onMembershipNumberChange();
+    }
+    this.lastPhoneMembershipNumber = '';
+  }
+
+  protected async lookupMembershipByPhone(): Promise<void> {
+    const normalizedPhone = this.normalizePhoneNumber(this.phone);
+    if (
+      normalizedPhone.length < 7 ||
+      normalizedPhone.length > 15 ||
+      normalizedPhone === this.lastPhoneLookup
+    ) {
+      return;
+    }
+
+    const requestId = ++this.phoneLookupRequest;
+    this.phoneLookupLoading = true;
+    this.phoneLookupMessage = '';
+    try {
+      const response = await fetch('/api/membership-phone-lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: this.phone.trim() }),
+      });
+      if (
+        requestId !== this.phoneLookupRequest ||
+        normalizedPhone !== this.normalizePhoneNumber(this.phone)
+      ) {
+        return;
+      }
+
+      if (response.status === 404) {
+        this.lastPhoneLookup = normalizedPhone;
+        this.phoneLookupMessage =
+          'No matching member found. Enter the membership number manually.';
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(`Mobile number lookup failed (HTTP ${response.status}).`);
+      }
+
+      const result: { matches?: unknown } = await response.json();
+      if (
+        !Array.isArray(result.matches) ||
+        result.matches.length === 0 ||
+        !result.matches.every(
+          (match) =>
+            typeof match === 'object' &&
+            match !== null &&
+            typeof match.membershipNumber === 'string' &&
+            Array.isArray(match.names) &&
+            match.names.length > 0 &&
+            match.names.every(
+              (name: unknown) => typeof name === 'string' && name.length > 0,
+            ),
+        )
+      ) {
+        throw new Error('The mobile lookup returned an invalid response.');
+      }
+
+      this.phoneLookupMatches = result.matches;
+      this.lastPhoneLookup = normalizedPhone;
+      if (this.phoneLookupMatches.length === 1) {
+        await this.selectPhoneLookupMatch(this.phoneLookupMatches[0]);
+      } else {
+        this.phoneLookupMessage =
+          'More than one member uses this mobile number. Choose a member.';
+      }
+    } catch (error) {
+      if (
+        requestId !== this.phoneLookupRequest ||
+        normalizedPhone !== this.normalizePhoneNumber(this.phone)
+      ) {
+        return;
+      }
+      this.phoneLookupMessage =
+        error instanceof TypeError
+          ? 'Could not reach the mobile lookup service. You can enter the membership number manually.'
+          : error instanceof Error
+            ? error.message
+            : 'Could not look up this mobile number.';
+    } finally {
+      if (requestId === this.phoneLookupRequest) {
+        this.phoneLookupLoading = false;
+        this.changeDetector.markForCheck();
+      }
+    }
+  }
+
+  protected async onPhoneMemberSelected(membershipNumber: string): Promise<void> {
+    const match = this.phoneLookupMatches.find(
+      (candidate) => candidate.membershipNumber === membershipNumber,
+    );
+    if (match) {
+      await this.selectPhoneLookupMatch(match);
+    }
+  }
+
+  private async selectPhoneLookupMatch(match: MembershipPhoneMatch): Promise<void> {
+    this.membershipNumber = match.membershipNumber;
+    this.lastPhoneMembershipNumber = match.membershipNumber;
+    this.phoneLookupMatches = [];
+    this.onMembershipNumberChange();
+    await this.lookupMembershipNumber();
+    this.phoneLookupMessage = 'Member number and name found from mobile number.';
+  }
+
+  private normalizePhoneNumber(value: string): string {
+    let digits = value.replace(/\D/g, '');
+    if (digits.startsWith('0044')) {
+      digits = digits.slice(4);
+      return `0${digits}`;
+    }
+    if (digits.startsWith('44')) {
+      digits = digits.slice(2);
+      return `0${digits}`;
+    }
+    return digits.startsWith('0') ? digits : `0${digits}`;
+  }
+
+  protected async lookupMembershipNumber(): Promise<void> {
+    const membershipNumber = this.membershipNumber.trim();
+    if (!membershipNumber || membershipNumber === this.lastLookedUpMembershipNumber) {
+      return;
+    }
+
+    const requestId = ++this.membershipLookupRequest;
+    this.membershipLookupLoading = true;
+    this.membershipLookupMessage = '';
+    try {
+      const response = await fetch('/api/membership-lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ membershipNumber }),
+      });
+      if (
+        requestId !== this.membershipLookupRequest ||
+        membershipNumber !== this.membershipNumber.trim()
+      ) {
+        return;
+      }
+
+      if (response.status === 404) {
+        if (this.lastAutofilledName && this.name === this.lastAutofilledName) {
+          this.name = '';
+        }
+        this.lastAutofilledName = '';
+        this.lastLookedUpMembershipNumber = membershipNumber;
+        this.membershipLookupMessage =
+          'Enter valid membership number';
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(`Membership lookup failed (HTTP ${response.status}).`);
+      }
+
+      const result: { names?: unknown } = await response.json();
+      if (
+        !Array.isArray(result.names) ||
+        result.names.length === 0 ||
+        !result.names.every((name) => typeof name === 'string' && name.length > 0)
+      ) {
+        throw new Error('The membership lookup returned an invalid response.');
+      }
+      this.membershipNames = result.names;
+      this.membershipNumberValid = true;
+      this.lastLookedUpMembershipNumber = membershipNumber;
+      if (this.membershipNames.length === 1) {
+        this.name = this.membershipNames[0];
+        this.lastAutofilledName = this.name;
+        this.membershipLookupMessage =
+          'Member found. You can edit the participant name if needed.';
+      } else {
+        this.name = '';
+        this.lastAutofilledName = '';
+        this.membershipLookupMessage = 'More than one member found. Choose a name.';
+      }
+    } catch (error) {
+      if (
+        requestId !== this.membershipLookupRequest ||
+        membershipNumber !== this.membershipNumber.trim()
+      ) {
+        return;
+      }
+      this.membershipLookupMessage =
+        error instanceof TypeError
+          ? 'Could not reach the membership lookup service. You can enter the participant name manually.'
+          : error instanceof Error
+            ? error.message
+            : 'Could not look up this membership number.';
+    } finally {
+      if (requestId === this.membershipLookupRequest) {
+        this.membershipLookupLoading = false;
+        this.changeDetector.markForCheck();
+      }
+    }
+  }
+
+  protected onMemberNameSelected(): void {
+    this.lastAutofilledName = this.name;
+    if (this.name) {
+      this.membershipLookupMessage = 'Member name selected.';
+    }
+  }
+
   protected toggleGame(game: Game, event: Event): void {
     const checked = (event.target as HTMLInputElement).checked;
     if (checked && !this.selectedGames.includes(game)) {
@@ -63,12 +308,30 @@ export class Registration {
   protected async submit(): Promise<void> {
     this.errorMessage = '';
     this.successMessage = '';
+    if (!this.membershipNumber.trim()) {
+      this.errorMessage = 'A membership number is required.';
+      return;
+    }
+    if (
+      this.membershipNumber.trim() &&
+      this.membershipNumber.trim() !== this.lastLookedUpMembershipNumber
+    ) {
+      await this.lookupMembershipNumber();
+    }
+    if (!this.membershipNumberValid) {
+      this.errorMessage = 'Enter a valid membership number from the member list.';
+      return;
+    }
     if (!this.age || this.age < 8 || !this.selectedGames.length) {
       this.errorMessage = 'Enter an eligible age and select at least one game.';
       return;
     }
     if (this.age < 18 && !this.guardian.trim()) {
       this.errorMessage = 'A parent or guardian name is required for participants under 18.';
+      return;
+    }
+    if (!this.membershipNumber.trim()) {
+      this.errorMessage = 'A membership number is required.';
       return;
     }
 
@@ -79,6 +342,7 @@ export class Registration {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: this.name.trim(),
+          membershipNumber: this.membershipNumber.trim(),
           age: this.age,
           phone: this.phone.trim(),
           email: this.email.trim(),
@@ -127,6 +391,20 @@ export class Registration {
 
   private clearForm(): void {
     this.name = '';
+    this.membershipNumber = '';
+    this.membershipNames = [];
+    this.membershipNumberValid = false;
+    this.membershipLookupLoading = false;
+    this.membershipLookupMessage = '';
+    this.phoneLookupMatches = [];
+    this.phoneLookupLoading = false;
+    this.phoneLookupMessage = '';
+    this.lastLookedUpMembershipNumber = '';
+    this.lastAutofilledName = '';
+    this.lastPhoneLookup = '';
+    this.lastPhoneMembershipNumber = '';
+    this.membershipLookupRequest += 1;
+    this.phoneLookupRequest += 1;
     this.age = null;
     this.phone = '';
     this.email = '';

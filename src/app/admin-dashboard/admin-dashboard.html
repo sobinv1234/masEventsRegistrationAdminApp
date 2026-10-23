@@ -119,7 +119,7 @@
                 name="searchTerm"
                 [(ngModel)]="searchTerm"
                 (ngModelChange)="onFiltersChanged()"
-                placeholder="Name, email, phone, or guardian"
+                placeholder="Name, membership number, email, phone, or guardian"
               />
             </div>
             <div class="filter-control">
@@ -187,6 +187,7 @@
               <thead>
                 <tr>
                   <th>Participant</th>
+                  <th>Membership number</th>
                   <th>Games</th>
                   <th>Contact</th>
                   <th>Parent / guardian</th>
@@ -203,6 +204,7 @@
                       <strong>{{ record.name }}</strong>
                       <span>{{ record.age }} years</span>
                     </td>
+                    <td>{{ record.membershipNumber || '—' }}</td>
                     <td>
                       @for (choice of record.games; track choice.game) {
                         <span class="game-chip">{{ choice.game }} · {{ choice.category }}</span>

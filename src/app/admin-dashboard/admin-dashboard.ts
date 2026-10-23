@@ -5,6 +5,7 @@ type RegistrationRecord = {
   id: string;
   createdAt: string;
   name: string;
+  membershipNumber?: string;
   age: number;
   phone: string;
   email: string;
@@ -59,7 +60,13 @@ export class AdminDashboard {
     return this.records.filter((record) => {
       const matchesSearch =
         !query ||
-        [record.name, record.email, record.phone, record.guardian].some((value) =>
+        [
+          record.name,
+          record.membershipNumber ?? '',
+          record.email,
+          record.phone,
+          record.guardian,
+        ].some((value) =>
           value.toLocaleLowerCase().includes(query),
         );
       const matchesAge =
@@ -426,6 +433,7 @@ export class AdminDashboard {
     const rows: (string | number)[][] = [
       [
         'Participant name',
+        'Membership number',
         'Age',
         'Contact number',
         'Email address',
@@ -437,6 +445,7 @@ export class AdminDashboard {
       ],
       ...this.records.map((record) => [
         record.name,
+        record.membershipNumber ?? '',
         record.age,
         record.phone,
         record.email,
