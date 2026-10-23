@@ -4,7 +4,7 @@ import { RouterLink } from '@angular/router';
 
 type ContactMatch = {
   membershipNumber: string;
-  name: string;
+  names: string[];
 };
 
 @Component({
@@ -27,15 +27,20 @@ export class ContactDetailsForm {
   protected errorMessage = '';
   protected successMessage = '';
   protected lookingUp = false;
+  protected phoneMatchVerified = false;
   protected submitting = false;
   protected submitted = false;
+  private phoneLookupRequest = 0;
 
   protected onPhoneChanged(): void {
+    this.phoneLookupRequest += 1;
+    this.lookingUp = false;
     this.membershipNumber = '';
     this.name = '';
     this.email = '';
     this.matches = [];
     this.selectedMatch = -1;
+    this.phoneMatchVerified = false;
     this.lookupMessage = '';
     this.errorMessage = '';
   }
@@ -45,7 +50,9 @@ export class ContactDetailsForm {
     if (!phone || this.lookingUp) {
       return;
     }
+    const requestId = ++this.phoneLookupRequest;
     this.lookingUp = true;
+    this.phoneMatchVerified = false;
     this.lookupMessage = '';
     this.errorMessage = '';
     try {
@@ -55,11 +62,14 @@ export class ContactDetailsForm {
         body: JSON.stringify({ phone }),
         cache: 'no-store',
       });
+      if (requestId !== this.phoneLookupRequest || phone !== this.phone.trim()) {
+        return;
+      }
       if (response.status === 404) {
         this.matches = [];
         this.membershipNumber = '';
         this.lookupMessage =
-          'No matching member was found. You can still submit your contact details.';
+          'No matching member was found. Check that your phone number is listed in the member directory.';
         return;
       }
       if (!response.ok) {
@@ -68,12 +78,10 @@ export class ContactDetailsForm {
       const result: {
         matches: { membershipNumber: string; names: string[] }[];
       } = await response.json();
-      this.matches = result.matches.flatMap((match) =>
-        match.names.map((name) => ({
-          membershipNumber: match.membershipNumber,
-          name,
-        })),
-      );
+      if (requestId !== this.phoneLookupRequest || phone !== this.phone.trim()) {
+        return;
+      }
+      this.matches = result.matches;
       if (this.matches.length === 1) {
         this.selectMatch(0);
         this.lookupMessage = 'Member details found. Please check and complete your details.';
@@ -81,15 +89,20 @@ export class ContactDetailsForm {
         this.lookupMessage = 'More than one member matches. Please select your name.';
       }
     } catch (error) {
+      if (requestId !== this.phoneLookupRequest) {
+        return;
+      }
       this.errorMessage =
         error instanceof TypeError
-          ? 'Could not reach the member lookup service. You can still enter your details manually.'
+          ? 'Could not reach the member lookup service. Please try again before submitting.'
           : error instanceof Error
             ? error.message
             : 'Could not look up this phone number.';
     } finally {
-      this.lookingUp = false;
-      this.changeDetector.markForCheck();
+      if (requestId === this.phoneLookupRequest) {
+        this.lookingUp = false;
+        this.changeDetector.markForCheck();
+      }
     }
   }
 
@@ -97,16 +110,25 @@ export class ContactDetailsForm {
     const match = this.matches[index];
     if (!match) {
       this.membershipNumber = '';
+      this.phoneMatchVerified = false;
       return;
     }
     this.selectedMatch = index;
     this.membershipNumber = match.membershipNumber;
-    this.name = match.name;
+    this.name = match.names.join(', ');
+    this.phoneMatchVerified = true;
+    this.errorMessage = '';
+    this.lookupMessage = 'Member details found. Please check and complete your details.';
   }
 
   protected async submit(event: SubmitEvent): Promise<void> {
     event.preventDefault();
     if (this.submitting || this.submitted) {
+      return;
+    }
+    if (!this.phoneMatchVerified || this.selectedMatch < 0) {
+      this.errorMessage = 'Find and select a matching member using a phone number in the member directory.';
+      this.changeDetector.markForCheck();
       return;
     }
     this.errorMessage = '';

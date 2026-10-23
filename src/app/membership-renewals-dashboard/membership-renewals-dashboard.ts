@@ -7,6 +7,7 @@ type RenewalChild = { name: string; age: number | null };
 type RenewalRecord = {
   id: string;
   createdAt: string;
+  mobileNumber?: string;
   email: string;
   membershipType: 'individual' | 'family';
   membershipNumber: string;
@@ -63,6 +64,7 @@ export class MembershipRenewalsDashboard implements OnInit {
     return this.records.filter((record) =>
       [
         record.membershipNumber,
+        record.mobileNumber ?? '',
         record.membershipHolderName,
         record.email,
         record.phone,
@@ -300,6 +302,7 @@ export class MembershipRenewalsDashboard implements OnInit {
     const rows: (string | number)[][] = [
       [
         'Membership number',
+        'Directory mobile number',
         'Membership holder',
         'Membership type',
         'Member age',
@@ -318,6 +321,7 @@ export class MembershipRenewalsDashboard implements OnInit {
       ],
       ...this.records.map((record) => [
         record.membershipNumber,
+        record.mobileNumber ?? '',
         record.membershipHolderName,
         record.membershipType === 'family' ? 'Family (£30)' : 'Individual (£20)',
         record.memberAge,

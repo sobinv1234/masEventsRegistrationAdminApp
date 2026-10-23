@@ -67,7 +67,7 @@
             maxlength="50"
             required
           />
-          <span class="optional">If your mobile number is not in the directory, enter your membership number here.</span>
+          <span class="optional">Enter your membership number if needed. It must match the mobile number and name in the directory.</span>
         </label>
 </div>
 </div>
@@ -142,6 +142,7 @@
             maxlength="120"
             autocomplete="name"
             required
+            disabled
           />
         </label>
         <label class="field">
@@ -235,12 +236,12 @@
       <button
         class="submit-button"
         type="submit"
-        [disabled]="submitting || submitted || !membershipNumber"
+        [disabled]="submitting || submitted || !mobileNumber.trim() || !membershipNumber"
       >
         {{ submitting ? 'Submitting…' : submitted ? 'Submitted' : 'Submit renewal' }}
       </button>
       @if (!membershipNumber) {
-        <p class="muted submit-hint">Find your membership using your mobile number before submitting.</p>
+        <p class="muted submit-hint">Find your membership using the mobile number recorded in the directory before submitting.</p>
       }
     </form>
     <!-- <footer><a routerLink="/">Return to the MAS registration form</a></footer> -->

@@ -78,4 +78,35 @@ describe('MembershipRenewalForm', () => {
     expect(form['membershipNumber']).toBe('0203');
     expect(form['membershipHolderName']).toBe('Shibu Merlin Thaliy');
   });
+
+  it('disables the holder name and submits the mobile number used for directory lookup', async () => {
+    const fixture = TestBed.createComponent(MembershipRenewalForm);
+    const form = fixture.componentInstance;
+    form['mobileNumber'] = '0741111775410';
+    form['membershipNumber'] = '203';
+    form['membershipHolderName'] = 'Shibu Merlin Thaliy';
+    form['memberAge'] = 35;
+    form['email'] = 'member@example.com';
+    form['postcode'] = 'SO53 2PL';
+    form['phone'] = '0741111775410';
+    form['consent'] = true;
+    const fetchSpy = spyOn(window, 'fetch').and.returnValue(
+      Promise.resolve(
+        new Response(JSON.stringify({ message: 'Renewal submitted.' }), {
+          status: 201,
+        }),
+      ),
+    );
+    fixture.detectChanges();
+
+    const holderNameInput = fixture.nativeElement.querySelector(
+      'input[name="membershipHolderName"]',
+    ) as HTMLInputElement;
+    expect(holderNameInput.disabled).toBeTrue();
+
+    await form['submitRenewal'](new Event('submit') as SubmitEvent);
+
+    const request = fetchSpy.calls.mostRecent().args[1];
+    expect(JSON.parse(request?.body as string).mobileNumber).toBe('0741111775410');
+  });
 });

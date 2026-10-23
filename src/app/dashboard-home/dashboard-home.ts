@@ -9,12 +9,26 @@ type Member = {
   phones: string[];
   email: string;
   address?: string;
+  addressUpdatedAt?: string;
+  renewalDetails?: {
+    membershipType: 'individual' | 'family';
+    memberAge: number;
+    spouseName: string;
+    spouseAge: number | null;
+    children: { name: string; age: number | null }[];
+    otherFamilyMembers: string;
+    postcode: string;
+    spousePhone: string;
+    additionalPhones: string;
+  } | null;
 };
 
 type Registration = { membershipNumber?: string };
 
 type ContactDetailsUpdate = {
+  createdAt?: string;
   membershipNumber: string;
+  email: string;
   address: string;
 };
 
@@ -86,8 +100,32 @@ export class DashboardHome implements OnInit {
         ...member.phones,
         member.email,
         member.address ?? '',
+        this.formatRenewalDetails(member),
       ].some((value) => value.toLocaleLowerCase().includes(query)),
     );
+  }
+
+  protected formatRenewalDetails(member: Member): string {
+    const details = member.renewalDetails;
+    if (!details) {
+      return '';
+    }
+    return [
+      `${details.membershipType} membership`,
+      `Member age: ${details.memberAge}`,
+      details.spouseName
+        ? `Spouse: ${details.spouseName}${details.spouseAge !== null ? ` (${details.spouseAge})` : ''}`
+        : '',
+      ...details.children
+        .filter((child) => child.name)
+        .map((child) => `Child: ${child.name}${child.age !== null ? ` (${child.age})` : ''}`),
+      details.otherFamilyMembers,
+      details.postcode ? `Postcode: ${details.postcode}` : '',
+      details.spousePhone ? `Spouse phone: ${details.spousePhone}` : '',
+      details.additionalPhones,
+    ]
+      .filter(Boolean)
+      .join('; ');
   }
 
   protected get registeredMembershipCount(): number {
@@ -200,18 +238,46 @@ export class DashboardHome implements OnInit {
       }
 
       const updates: ContactDetailsUpdate[] = await response.json();
-      const addressesByMembership = new Map<string, string>();
+      const addressesByMembership = new Map<
+        string,
+        { email: string; address: string; createdAt: string }
+      >();
       for (const update of updates) {
         const membershipNumber = update.membershipNumber.trim();
-        if (membershipNumber && !addressesByMembership.has(membershipNumber)) {
-          addressesByMembership.set(membershipNumber, update.address);
+        if (membershipNumber && update.address.trim()) {
+          const current = addressesByMembership.get(membershipNumber);
+          if (
+            !current ||
+            (update.createdAt && update.createdAt > current.createdAt)
+          ) {
+            addressesByMembership.set(membershipNumber, {
+              email: update.email,
+              address: update.address,
+              createdAt: update.createdAt ?? '',
+            });
+          }
         }
       }
 
-      this.members = this.members.map((member) => ({
-        ...member,
-        address: addressesByMembership.get(member.membershipNumber) ?? '',
-      }));
+      this.members = this.members.map((member) => {
+        const contactUpdate = addressesByMembership.get(member.membershipNumber);
+        const contactUpdateIsNewer =
+          !!contactUpdate &&
+          (!contactUpdate.createdAt ||
+            !member.addressUpdatedAt ||
+            contactUpdate.createdAt >= member.addressUpdatedAt);
+        return {
+          ...member,
+          email:
+            contactUpdateIsNewer && contactUpdate.email
+              ? contactUpdate.email
+              : member.email,
+          address:
+            contactUpdateIsNewer
+              ? contactUpdate.address
+              : member.address ?? '',
+        };
+      });
     } catch (error) {
       this.addressErrorMessage =
         error instanceof TypeError
@@ -224,13 +290,21 @@ export class DashboardHome implements OnInit {
 
   private buildCsv(): string {
     const rows: string[][] = [
-      ['Membership number', 'Member name(s)', 'Phone number(s)', 'Email address', 'Address'],
+      [
+        'Membership number',
+        'Member name(s)',
+        'Phone number(s)',
+        'Email address',
+        'Address',
+        'Renewal details',
+      ],
       ...this.members.map((member) => [
         member.membershipNumber,
         member.names.join(', '),
         member.phones.join(', '),
         member.email,
         member.address ?? '',
+        this.formatRenewalDetails(member),
       ]),
     ];
 

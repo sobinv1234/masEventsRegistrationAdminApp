@@ -6,7 +6,8 @@
       <p>
         Help us complete or correct your member contact information. Enter your
         phone number first to find your membership number and any details already
-        in our directory.
+        in our directory. Your phone number and membership number must match the
+        member directory before you can submit an update.
       </p>
     </header>
 
@@ -54,7 +55,7 @@
               <option [ngValue]="-1" disabled>Choose a member</option>
               @for (match of matches; track $index; let index = $index) {
                 <option [ngValue]="index">
-                  {{ match.name }} — Membership {{ match.membershipNumber }}
+                  {{ match.names.join(', ') }} — Membership {{ match.membershipNumber }}
                 </option>
               }
             </select>
@@ -68,7 +69,14 @@
 
         <label class="field">
           Full Name <span aria-hidden="true">*</span>
-          <input name="name" [(ngModel)]="name" autocomplete="name" maxlength="120" required />
+          <input
+            name="name"
+            [value]="name"
+            autocomplete="name"
+            maxlength="500"
+            required
+            disabled
+          />
         </label>
         <label class="field">
           Email Address <span aria-hidden="true">*</span>
@@ -106,7 +114,11 @@
           </label>
         </section>
 
-        <button class="submit-button" type="submit" [disabled]="submitting">
+        <button
+          class="submit-button"
+          type="submit"
+          [disabled]="submitting || !phoneMatchVerified"
+        >
           {{ submitting ? 'Submitting…' : 'Submit contact details' }}
         </button>
       }

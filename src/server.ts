@@ -20,6 +20,10 @@ import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { membershipDirectory } from './membership-directory';
 import {
+  mergeMembershipProfile,
+  type MembershipProfile,
+} from './membership-profile';
+import {
   getMembershipNames,
   getMembershipPhoneNumbers,
 } from './membership-family-directory';
@@ -49,26 +53,7 @@ type RegistrationClearSchedule = {
   requestedAt: string;
   scheduledFor: string;
 };
-type RenewalChild = { name: string; age: number | null };
-type MembershipRenewal = {
-  id: string;
-  createdAt: string;
-  email: string;
-  membershipType: 'individual' | 'family';
-  membershipNumber: string;
-  membershipHolderName: string;
-  memberAge: number;
-  spouseName: string;
-  spouseAge: number | null;
-  children: RenewalChild[];
-  otherFamilyMembers: string;
-  address: string;
-  postcode: string;
-  phone: string;
-  spousePhone: string;
-  additionalPhones: string;
-  consent: true;
-};
+type MembershipRenewal = MembershipProfile;
 type ContactDetailsUpdate = {
   id: string;
   createdAt: string;
@@ -120,6 +105,10 @@ function getSqliteDatabase(): SqliteDatabase {
       id TEXT PRIMARY KEY,
       created_at TEXT NOT NULL,
       renewal_data TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS membership_directory_profiles (
+      membership_number TEXT PRIMARY KEY,
+      profile_data TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS membership_renewal_clear_schedule (
       schedule_key TEXT PRIMARY KEY,
@@ -177,6 +166,12 @@ async function ensureNeonSchema(): Promise<void> {
           schedule_key TEXT PRIMARY KEY,
           requested_at TEXT NOT NULL,
           scheduled_for TEXT NOT NULL
+        )`,
+      )
+      .then(() =>
+        getNeonSql()`CREATE TABLE IF NOT EXISTS membership_directory_profiles (
+          membership_number TEXT PRIMARY KEY,
+          profile_data TEXT NOT NULL
         )`,
       )
       .then(() =>
@@ -273,21 +268,107 @@ async function saveMembershipRenewal(
   renewal: MembershipRenewal,
   key: Buffer,
 ): Promise<void> {
-  const renewalData = encryptJson(renewal, key);
+  const existingRenewals = await getMembershipRenewals(key);
+  const matchingRenewals = existingRenewals.filter(
+    (existing) => existing.membershipNumber === renewal.membershipNumber,
+  );
+  const storedRenewal: MembershipRenewal = {
+    ...renewal,
+    id: matchingRenewals[0]?.id ?? renewal.id,
+  };
+  const renewalData = encryptJson(storedRenewal, key);
   if (process.env['DATABASE_URL']) {
     await ensureNeonSchema();
-    await getNeonSql()`INSERT INTO membership_renewals
-      (id, created_at, renewal_data)
-      VALUES (${renewal.id}, ${renewal.createdAt}, ${renewalData})`;
+    if (matchingRenewals.length > 0) {
+      await getNeonSql()`UPDATE membership_renewals
+        SET created_at = ${renewal.createdAt}, renewal_data = ${renewalData}
+        WHERE id = ${storedRenewal.id}`;
+      for (const duplicate of matchingRenewals.slice(1)) {
+        await getNeonSql()`DELETE FROM membership_renewals
+          WHERE id = ${duplicate.id}`;
+      }
+    } else {
+      await getNeonSql()`INSERT INTO membership_renewals
+        (id, created_at, renewal_data)
+        VALUES (${storedRenewal.id}, ${storedRenewal.createdAt}, ${renewalData})`;
+    }
+    return;
+  }
+
+  const db = getSqliteDatabase();
+  if (matchingRenewals.length > 0) {
+    db.prepare(
+      `UPDATE membership_renewals
+       SET created_at = ?, renewal_data = ?
+       WHERE id = ?`,
+    ).run(storedRenewal.createdAt, renewalData, storedRenewal.id);
+    for (const duplicate of matchingRenewals.slice(1)) {
+      db.prepare('DELETE FROM membership_renewals WHERE id = ?').run(duplicate.id);
+    }
+  } else {
+    db.prepare(
+      `INSERT INTO membership_renewals (id, created_at, renewal_data)
+       VALUES (?, ?, ?)`,
+    ).run(storedRenewal.id, storedRenewal.createdAt, renewalData);
+  }
+}
+
+async function getMembershipDirectoryProfiles(
+  key: Buffer,
+): Promise<Map<string, MembershipRenewal>> {
+  let rows: Record<string, unknown>[];
+  if (process.env['DATABASE_URL']) {
+    await ensureNeonSchema();
+    rows = await getNeonSql()`SELECT membership_number, profile_data
+      FROM membership_directory_profiles`;
+  } else {
+    rows = getSqliteDatabase()
+      .prepare(
+        `SELECT membership_number, profile_data
+         FROM membership_directory_profiles`,
+      )
+      .all();
+  }
+
+  return new Map(
+    rows.map((row) => [
+      String(row['membership_number']),
+      decryptMembershipRenewal(String(row['profile_data']), key),
+    ]),
+  );
+}
+
+async function saveMembershipDirectoryProfile(
+  renewal: MembershipRenewal,
+  key: Buffer,
+): Promise<void> {
+  const profiles = await getMembershipDirectoryProfiles(key);
+  const profile =
+    profiles.has(renewal.membershipNumber)
+      ? mergeMembershipProfile(
+          profiles.get(renewal.membershipNumber)!,
+          renewal,
+        )
+      : renewal;
+  const profileData = encryptJson(profile, key);
+  if (process.env['DATABASE_URL']) {
+    await ensureNeonSchema();
+    await getNeonSql()`INSERT INTO membership_directory_profiles
+      (membership_number, profile_data)
+      VALUES (${renewal.membershipNumber}, ${profileData})
+      ON CONFLICT (membership_number)
+      DO UPDATE SET profile_data = EXCLUDED.profile_data`;
     return;
   }
 
   getSqliteDatabase()
     .prepare(
-      `INSERT INTO membership_renewals (id, created_at, renewal_data)
-       VALUES (?, ?, ?)`,
+      `INSERT INTO membership_directory_profiles (membership_number, profile_data)
+       VALUES (?, ?)
+       ON CONFLICT(membership_number)
+       DO UPDATE SET profile_data = excluded.profile_data`,
     )
-    .run(renewal.id, renewal.createdAt, renewalData);
+    .run(renewal.membershipNumber, profileData);
 }
 
 async function getMembershipRenewals(key: Buffer): Promise<MembershipRenewal[]> {
@@ -1059,6 +1140,8 @@ function isMembershipRenewal(value: unknown): value is MembershipRenewal {
     isRecord(value) &&
     typeof value['id'] === 'string' &&
     typeof value['createdAt'] === 'string' &&
+    (value['mobileNumber'] === undefined ||
+      typeof value['mobileNumber'] === 'string') &&
     typeof value['email'] === 'string' &&
     (value['membershipType'] === 'individual' ||
       value['membershipType'] === 'family') &&
@@ -1471,18 +1554,32 @@ app.post('/api/contact-details-updates', async (req, res, next) => {
   const address = value['address'].trim();
   const normalizedPhone = normalizePhoneNumber(phone);
   const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const directoryMember = membershipDirectory[membershipNumber];
+  const phoneMatchesMembership =
+    !!directoryMember &&
+    getMembershipPhoneNumbers(membershipNumber, directoryMember.phone).some(
+      (directoryPhone) => normalizePhoneNumber(directoryPhone) === normalizedPhone,
+    );
+  const directoryNames = directoryMember
+    ? getMembershipNames(membershipNumber, directoryMember.names).join(', ')
+    : '';
+  const nameMatchesMembership = Boolean(directoryNames) && name === directoryNames;
   if (
     normalizedPhone.length < 7 ||
     normalizedPhone.length > 15 ||
     !name ||
-    name.length > 120 ||
+    name.length > 500 ||
+    !nameMatchesMembership ||
     !validEmail ||
     email.length > 254 ||
     !address ||
     address.length > 500 ||
-    (membershipNumber !== '' && !Object.hasOwn(membershipDirectory, membershipNumber))
+    !phoneMatchesMembership
   ) {
-    res.status(400).json({ message: 'Please check the phone, name, email, and address.' });
+    res.status(400).json({
+      message:
+        'The name, phone number, and membership number must match a member in the directory. Please find your details again.',
+    });
     return;
   }
 
@@ -1515,6 +1612,7 @@ app.post('/api/membership-renewals', async (req, res, next) => {
   const value = req.body;
   if (
     !isRecord(value) ||
+    typeof value['mobileNumber'] !== 'string' ||
     typeof value['membershipNumber'] !== 'string' ||
     typeof value['membershipHolderName'] !== 'string' ||
     typeof value['membershipType'] !== 'string' ||
@@ -1544,14 +1642,40 @@ app.post('/api/membership-renewals', async (req, res, next) => {
 
   const membershipNumber = value['membershipNumber'].trim().replace(/^0+(?=\d)/, '');
   const membershipHolderName = value['membershipHolderName'].trim();
+  const mobileNumber = value['mobileNumber'].trim();
+  const normalizedMobileNumber = normalizePhoneNumber(mobileNumber);
   const email = value['email'].trim();
   const postcode = value['postcode'].trim();
   const phone = value['phone'].trim();
   const isValidAge = (age: unknown): age is number =>
     typeof age === 'number' && Number.isInteger(age) && age >= 0 && age <= 120;
+  const directoryMember = membershipDirectory[membershipNumber];
+  const holderNameMatches =
+    !!directoryMember &&
+    getMembershipNames(membershipNumber, directoryMember.names).includes(
+      membershipHolderName,
+    );
+  const mobileMatchesMembership =
+    !!directoryMember &&
+    getMembershipPhoneNumbers(membershipNumber, directoryMember.phone).some(
+      (directoryPhone) =>
+        normalizePhoneNumber(directoryPhone) === normalizedMobileNumber,
+    );
   if (
     !Object.hasOwn(membershipDirectory, membershipNumber) ||
-    !membershipHolderName ||
+    !holderNameMatches ||
+    normalizedMobileNumber.length < 7 ||
+    normalizedMobileNumber.length > 15 ||
+    !mobileMatchesMembership
+  ) {
+    res.status(400).json({
+      message:
+        'The mobile number, membership number, and membership holder name must match the member directory.',
+    });
+    return;
+  }
+
+  if (
     membershipHolderName.length > 120 ||
     !isValidAge(value['memberAge']) ||
     (value['membershipType'] !== 'individual' &&
@@ -1589,6 +1713,7 @@ app.post('/api/membership-renewals', async (req, res, next) => {
     const renewal: MembershipRenewal = {
       id: randomUUID(),
       createdAt: new Date().toISOString(),
+      mobileNumber,
       email,
       membershipType: value['membershipType'],
       membershipNumber,
@@ -1609,6 +1734,7 @@ app.post('/api/membership-renewals', async (req, res, next) => {
       consent: true,
     };
     await saveMembershipRenewal(renewal, encryptionKey);
+    await saveMembershipDirectoryProfile(renewal, encryptionKey);
     res.status(201).json({
       message: 'Thank you. Your membership renewal details have been submitted.',
     });
@@ -1632,18 +1758,66 @@ app.get('/api/admin/registrations', adminAuthentication, async (_req, res, next)
   }
 });
 
-app.get('/api/admin/members', adminAuthentication, (_req, res) => {
-  const members = Object.entries(membershipDirectory)
-    .sort(([left], [right]) => Number(left) - Number(right))
-    .map(([membershipNumber, member]) => ({
-      membershipNumber,
-      names: getMembershipNames(membershipNumber, member.names),
-      phones: getMembershipPhoneNumbers(membershipNumber, member.phone),
-      email: member.email ?? '',
-    }));
+app.get('/api/admin/members', adminAuthentication, async (_req, res, next) => {
+  try {
+    const encryptionKey = getEncryptionKey();
+    const profiles =
+      encryptionKey && hasPersistentStorageConfigured()
+        ? await getMembershipDirectoryProfiles(encryptionKey)
+        : new Map<string, MembershipRenewal>();
+    const members = Object.entries(membershipDirectory)
+      .sort(([left], [right]) => Number(left) - Number(right))
+      .map(([membershipNumber, member]) => {
+        const profile = profiles.get(membershipNumber);
+        const names = profile?.spouseName
+          ? [...member.names, profile.spouseName]
+          : [...getMembershipNames(membershipNumber, member.names)];
+        for (const child of profile?.children ?? []) {
+          if (child.name && !names.includes(child.name)) {
+            names.push(child.name);
+          }
+        }
 
-  res.setHeader('Cache-Control', 'no-store');
-  res.json(members);
+        const directoryPhones = getMembershipPhoneNumbers(
+          membershipNumber,
+          member.phone,
+        );
+        const phones = profile
+          ? [
+              profile.phone || directoryPhones[0] || '',
+              profile.spousePhone || directoryPhones[1] || '',
+              profile.additionalPhones,
+            ].filter(Boolean)
+          : directoryPhones;
+
+        return {
+          membershipNumber,
+          names,
+          phones,
+          email: profile?.email || member.email || '',
+          address: [profile?.address, profile?.postcode].filter(Boolean).join(', '),
+          addressUpdatedAt: profile?.createdAt ?? '',
+          renewalDetails: profile
+            ? {
+                membershipType: profile.membershipType,
+                memberAge: profile.memberAge,
+                spouseName: profile.spouseName,
+                spouseAge: profile.spouseAge,
+                children: profile.children,
+                otherFamilyMembers: profile.otherFamilyMembers,
+                postcode: profile.postcode,
+                spousePhone: profile.spousePhone,
+                additionalPhones: profile.additionalPhones,
+              }
+            : null,
+        };
+      });
+
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(members);
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get(
@@ -1657,8 +1831,14 @@ app.get(
         return;
       }
       const renewals = await getMembershipRenewals(encryptionKey);
+      const latestRenewals = new Map<string, MembershipRenewal>();
+      for (const renewal of renewals) {
+        if (!latestRenewals.has(renewal.membershipNumber)) {
+          latestRenewals.set(renewal.membershipNumber, renewal);
+        }
+      }
       res.setHeader('Cache-Control', 'no-store');
-      res.json(renewals);
+      res.json([...latestRenewals.values()]);
     } catch (error) {
       next(error);
     }

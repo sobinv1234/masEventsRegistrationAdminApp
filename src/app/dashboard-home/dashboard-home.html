@@ -164,6 +164,7 @@
                 <th>Phone number(s)</th>
                 <th>Email address</th>
                 <th>Address</th>
+                <th>Renewal details</th>
               </tr>
             </thead>
             <tbody>
@@ -174,6 +175,7 @@
                   <td>{{ member.phones.join(', ') || '—' }}</td>
                   <td>{{ member.email || '—' }}</td>
                   <td>{{ member.address || '—' }}</td>
+                  <td>{{ formatRenewalDetails(member) || '—' }}</td>
                 </tr>
               }
             </tbody>

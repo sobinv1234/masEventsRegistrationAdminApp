@@ -164,6 +164,7 @@ export class MembershipRenewalForm {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          mobileNumber: this.mobileNumber.trim(),
           membershipNumber: this.membershipNumber,
           membershipHolderName: this.membershipHolderName,
           membershipType: this.membershipType,
