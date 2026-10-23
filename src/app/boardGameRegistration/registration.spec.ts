@@ -168,7 +168,7 @@ describe('Registration', () => {
       'select[name="name"]',
     ) as HTMLSelectElement;
     expect(nameSelect).not.toBeNull();
-    expect(nameSelect.options.length).toBe(3);
+    expect(nameSelect.options.length).toBe(4);
     expect(registration['name']).toBe('');
 
     nameSelect.selectedIndex = 2;
@@ -179,6 +179,48 @@ describe('Registration', () => {
     expect(registration['name']).toBe('Shared Member Two');
     expect(registration['membershipNumberValid']).toBeTrue();
     expect(registration['membershipLookupMessage']).toContain('selected');
+  });
+
+  it('allows entering a new participant name from the member-name dropdown', async () => {
+    const fixture = TestBed.createComponent(Registration);
+    const registration = fixture.componentInstance;
+    fixture.detectChanges();
+    registration['membershipNumber'] = 'duplicate-test';
+    spyOn(globalThis, 'fetch').and.resolveTo(
+      new Response(JSON.stringify({
+        names: ['Parent One', 'Parent Two'],
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await registration['lookupMembershipNumber']();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const nameSelect = fixture.nativeElement.querySelector(
+      'select[name="name"]',
+    ) as HTMLSelectElement;
+    expect(nameSelect.options.length).toBe(4);
+    expect(nameSelect.options[3].textContent).toBe('Type a new name');
+
+    nameSelect.selectedIndex = 3;
+    nameSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const nameInput = fixture.nativeElement.querySelector(
+      'input[name="name"]',
+    ) as HTMLInputElement;
+    expect(nameInput).not.toBeNull();
+    expect(nameInput.required).toBeTrue();
+
+    nameInput.value = 'Child Name';
+    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    await fixture.whenStable();
+    expect(registration['name']).toBe('Child Name');
+    expect(registration['membershipNumberValid']).toBeTrue();
   });
 
   it('keeps the name field as text for a single member match', async () => {

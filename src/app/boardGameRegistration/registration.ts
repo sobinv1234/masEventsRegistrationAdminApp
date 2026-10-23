@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 
 type Game = 'Carroms' | 'Chess' | 'PlayStation' | 'Cards';
 type MembershipPhoneMatch = { membershipNumber: string; names: string[] };
+const enterNewNameOption = '__enter_new_name__';
 
 @Component({
   selector: 'app-registration',
@@ -17,6 +18,7 @@ export class Registration {
   protected name = '';
   protected membershipNumber = '';
   protected membershipNames: string[] = [];
+  protected customNameSelected = false;
   protected membershipNumberValid = false;
   protected membershipLookupLoading = false;
   protected membershipLookupMessage = '';
@@ -71,6 +73,7 @@ export class Registration {
     this.membershipNumberValid = false;
     this.lastLookedUpMembershipNumber = '';
     this.membershipNames = [];
+    this.customNameSelected = false;
     this.membershipLookupMessage = '';
     this.membershipLookupLoading = false;
     this.membershipLookupRequest += 1;
@@ -259,6 +262,7 @@ export class Registration {
       this.membershipNames = result.names;
       this.membershipNumberValid = true;
       this.lastLookedUpMembershipNumber = membershipNumber;
+      this.customNameSelected = false;
       if (this.membershipNames.length === 1) {
         this.name = this.membershipNames[0];
         this.lastAutofilledName = this.name;
@@ -291,6 +295,15 @@ export class Registration {
   }
 
   protected onMemberNameSelected(): void {
+    if (this.name === enterNewNameOption) {
+      this.name = '';
+      this.customNameSelected = true;
+      this.lastAutofilledName = '';
+      this.membershipLookupMessage = 'Enter the participant name.';
+      return;
+    }
+
+    this.customNameSelected = false;
     this.lastAutofilledName = this.name;
     if (this.name) {
       this.membershipLookupMessage = 'Member name selected.';
@@ -394,6 +407,7 @@ export class Registration {
     this.name = '';
     this.membershipNumber = '';
     this.membershipNames = [];
+    this.customNameSelected = false;
     this.membershipNumberValid = false;
     this.membershipLookupLoading = false;
     this.membershipLookupMessage = '';

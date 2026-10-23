@@ -91,7 +91,7 @@
       <div class="col-12 col-md-6">
       <label class="field form-label mb-0">
         Full name <span aria-hidden="true">*</span>
-        @if (membershipNames.length > 1) {
+        @if (membershipNames.length > 1 && !customNameSelected) {
           <select
             name="name"
             class="form-select dropdown-name"
@@ -103,6 +103,7 @@
             @for (memberName of membershipNames; track memberName) {
               <option [value]="memberName">{{ memberName }}</option>
             }
+            <option value="__enter_new_name__">Type a new name</option>
           </select>
         } @else {
           <input
