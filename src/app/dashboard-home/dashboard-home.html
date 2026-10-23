@@ -101,18 +101,18 @@
         <div>
           <span class="section-kicker">BOARD GAMES 2026</span>
           <h2 id="progress-title">Registration progress</h2>
-          <p>Registered membership numbers compared with the member directory.</p>
+          <p>Participant registrations compared with the member directory.</p>
         </div>
         <strong class="progress-percent">{{ registrationProgress }}%</strong>
       </div>
       <progress
         class="registration-progress"
-        [value]="registeredMembershipCount"
+        [value]="registrations.length"
         [max]="members.length || 1"
-        [attr.aria-label]="registrationProgress + '% of memberships represented by registrations'"
+        [attr.aria-label]="registrationProgress + '% registration progress compared with the member directory'"
       ></progress>
       <div class="progress-labels">
-        <span>{{ registeredMembershipCount }} memberships represented</span>
+        <span>{{ registrations.length }} registrations</span>
         <span>{{ members.length }} total memberships</span>
       </div>
       <a class="primary-link" routerLink="/admin/board-games">Open Board Games registrations</a>

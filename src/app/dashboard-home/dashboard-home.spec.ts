@@ -11,9 +11,10 @@ describe('DashboardHome', () => {
     }).compileComponents();
   });
 
-  it('shows unique registered memberships as progress against the directory', () => {
+  it('shows registration entries as progress against the directory', () => {
     const fixture = TestBed.createComponent(DashboardHome);
     const dashboard = fixture.componentInstance;
+    dashboard['loggedIn'] = true;
     dashboard['members'] = [
       { membershipNumber: '20', names: ['Member One'], phones: [], email: '' },
       { membershipNumber: '21', names: ['Member Two'], phones: [], email: '' },
@@ -25,10 +26,16 @@ describe('DashboardHome', () => {
       { membershipNumber: '20' },
       { membershipNumber: '21' },
       {},
+      {},
     ];
+    fixture.detectChanges();
 
     expect(dashboard['registeredMembershipCount']).toBe(2);
-    expect(dashboard['registrationProgress']).toBe(50);
+    expect(dashboard['registrationProgress']).toBe(100);
+    expect(fixture.nativeElement.querySelector('.progress-percent').textContent.trim())
+      .toBe('100%');
+    expect(fixture.nativeElement.querySelector('.progress-labels').textContent)
+      .toContain('5 registrations');
   });
 
   it('searches the member directory by name, membership number, phone, and email', () => {

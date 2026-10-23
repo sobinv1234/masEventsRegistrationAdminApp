@@ -101,7 +101,7 @@ export class DashboardHome implements OnInit {
 
   protected get registrationProgress(): number {
     return this.members.length
-      ? Math.min(100, Math.round((this.registeredMembershipCount / this.members.length) * 100))
+      ? Math.min(100, Math.round((this.registrations.length / this.members.length) * 100))
       : 0;
   }
 
