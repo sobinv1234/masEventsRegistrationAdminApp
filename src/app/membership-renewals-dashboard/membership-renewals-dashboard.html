@@ -1,7 +1,7 @@
   @if (loggedIn) {
 <nav class="navbar navbar-expand-lg navbar-custom">
   <div class="container-fluid">
-    <a class="navbar-brand text-white" href="#">Home</a>
+    <a class="navbar-brand text-white" routerLink="/admin">Dashboard</a>
     <button class="navbar-toggler bg-white" type="button" type="button"
       data-bs-toggle="collapse"
       data-bs-target="#navbarMenu"
@@ -13,7 +13,7 @@
     <div class="collapse navbar-collapse" id="navbarMenu">
       <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
         <li class="nav-item px-md-2">
-           <a routerLink="/admin" class="nav-link text-white">Registrations</a>
+           <a routerLink="/admin/board-games" class="nav-link text-white">Board Games</a>
         </li>
         <li class="nav-item px-md-2">
             <a routerLink="/admin/renewals" class="nav-link text-white" aria-current="page">Renewal Members</a>
@@ -30,7 +30,7 @@
   </div>
 </nav>
   }
-<main class="dashboard-page">
+<main class="dashboard-page container mt-3">
   <section class="dashboard-card">
     <header class="dashboard-header">
       <div>

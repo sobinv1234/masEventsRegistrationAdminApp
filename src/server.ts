@@ -1632,6 +1632,20 @@ app.get('/api/admin/registrations', adminAuthentication, async (_req, res, next)
   }
 });
 
+app.get('/api/admin/members', adminAuthentication, (_req, res) => {
+  const members = Object.entries(membershipDirectory)
+    .sort(([left], [right]) => Number(left) - Number(right))
+    .map(([membershipNumber, member]) => ({
+      membershipNumber,
+      names: getMembershipNames(membershipNumber, member.names),
+      phones: getMembershipPhoneNumbers(membershipNumber, member.phone),
+      email: member.email ?? '',
+    }));
+
+  res.setHeader('Cache-Control', 'no-store');
+  res.json(members);
+});
+
 app.get(
   '/api/admin/membership-renewals',
   adminAuthentication,

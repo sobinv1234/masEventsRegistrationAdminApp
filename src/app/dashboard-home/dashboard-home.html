@@ -1,0 +1,228 @@
+  @if (loggedIn) {
+<nav class="navbar navbar-expand-lg navbar-custom">
+  <div class="container-fluid">
+    <a class="navbar-brand text-white" routerLink="/admin">Dashboard</a>
+    <button class="navbar-toggler bg-white" type="button" type="button"
+      data-bs-toggle="collapse"
+      data-bs-target="#navbarMenu"
+      aria-controls="navbarMenu"
+      aria-expanded="false"
+      aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarMenu">
+      <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+        <li class="nav-item px-md-2">
+           <a routerLink="/admin/board-games" class="nav-link text-white">Board Games</a>
+        </li>
+        <li class="nav-item px-md-2">
+            <a routerLink="/admin/renewals" class="nav-link text-white" aria-current="page">Renewal Members</a>
+        </li>
+        <li class="nav-item px-md-2">
+            <a routerLink="/admin/contact-details" class="nav-link text-white">Contact Details</a>
+        </li>
+        <li class="nav-item px-md-2">
+           <button type="button" class="btn btn-warning nav-link text-white" (click)="signOut()">Sign out</button>
+        </li>
+
+      </ul>
+    </div>
+  </div>
+</nav>
+  }
+
+<main class="dashboard-page container  mt-3">
+  @if (!loggedIn) {
+    <section class="login-card">
+      <div class="text-center">
+      <span class="eyebrow">MAS EXECUTIVE COMMITTEE</span>
+      <h1>Committee dashboard</h1>
+      <p>Sign in to view members, registration progress, and event information.</p>
+      </div>
+      <form (submit)="login($event)">
+        <label>
+          Username
+          <input name="username" [(ngModel)]="username" required autocomplete="username" />
+        </label>
+        <label>
+          Password
+          <input
+            name="password"
+            type="password"
+            [(ngModel)]="password"
+            required
+            autocomplete="current-password"
+          />
+        </label>
+        @if (errorMessage) {
+          <p class="error" role="alert">{{ errorMessage }}</p>
+        }
+        <button  class="btn btn-success" type="submit" [disabled]="loading || !username || !password">
+          {{ loading ? 'Signing in…' : 'Sign in' }}
+        </button>
+      </form>
+    </section>
+  } @else {
+    <header class="welcome-header">
+      <div>
+        <span class="eyebrow">MAS EXECUTIVE COMMITTEE</span>
+        <h1>Dashboard</h1>
+        <p>Member directory, event registration progress, and upcoming events.</p>
+      </div>
+      <button type="button" class="refresh-button" [disabled]="loading" (click)="refresh()">
+        {{ loading ? 'Refreshing…' : 'Refresh dashboard' }}
+      </button>
+    </header>
+
+    @if (errorMessage) {
+      <p class="error" role="alert">{{ errorMessage }}</p>
+    }
+
+    <section class="summary-grid" aria-label="Registration summary">
+      <article class="summary-card">
+        <span class="summary-label">Members in directory</span>
+        <strong>{{ members.length }}</strong>
+        <span>Household memberships</span>
+      </article>
+      <article class="summary-card">
+        <span class="summary-label">Board Games registrations</span>
+        <strong>{{ registrations.length }}</strong>
+        <span>Participants registered</span>
+      </article>
+      <article class="summary-card">
+        <span class="summary-label">Memberships represented</span>
+        <strong>{{ registeredMembershipCount }}</strong>
+        <span>Unique membership numbers registered</span>
+      </article>
+    </section>
+
+    <section class="content-card progress-card" aria-labelledby="progress-title">
+      <div class="section-heading">
+        <div>
+          <span class="section-kicker">BOARD GAMES 2026</span>
+          <h2 id="progress-title">Registration progress</h2>
+          <p>Registered membership numbers compared with the member directory.</p>
+        </div>
+        <strong class="progress-percent">{{ registrationProgress }}%</strong>
+      </div>
+      <progress
+        class="registration-progress"
+        [value]="registeredMembershipCount"
+        [max]="members.length || 1"
+        [attr.aria-label]="registrationProgress + '% of memberships represented by registrations'"
+      ></progress>
+      <div class="progress-labels">
+        <span>{{ registeredMembershipCount }} memberships represented</span>
+        <span>{{ members.length }} total memberships</span>
+      </div>
+      <a class="primary-link" routerLink="/admin/board-games">Open Board Games registrations</a>
+    </section>
+
+    <section class="content-card member-card" aria-labelledby="members-title">
+      <div class="section-heading member-heading">
+        <div>
+          <span class="section-kicker">MEMBERSHIP DIRECTORY</span>
+          <h2 id="members-title">All members</h2>
+          <p>Search by member name, membership number, phone, email, or address.</p>
+        </div>
+        <div class="member-tools">
+          <label class="member-search">
+            <span class="visually-hidden">Search members</span>
+            <input
+              type="search"
+              name="memberSearch"
+              [(ngModel)]="searchTerm"
+              placeholder="Search members…"
+            />
+          </label>
+          <button
+            type="button"
+            class="download-button"
+            [disabled]="members.length === 0"
+            (click)="downloadExcel()"
+          >
+            Download Excel
+          </button>
+        </div>
+      </div>
+      @if (addressErrorMessage) {
+        <p class="address-warning" role="status">{{ addressErrorMessage }}</p>
+      }
+      @if (loading && members.length === 0) {
+        <p class="empty-state">Loading the member directory…</p>
+      } @else if (filteredMembers.length === 0) {
+        <p class="empty-state">
+          {{ members.length ? 'No members match your search.' : 'The member directory is empty.' }}
+        </p>
+      } @else {
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Membership number</th>
+                <th>Member name(s)</th>
+                <th>Phone number(s)</th>
+                <th>Email address</th>
+                <th>Address</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (member of filteredMembers; track member.membershipNumber) {
+                <tr>
+                  <td><strong>{{ member.membershipNumber }}</strong></td>
+                  <td>{{ member.names.join(', ') }}</td>
+                  <td>{{ member.phones.join(', ') || '—' }}</td>
+                  <td>{{ member.email || '—' }}</td>
+                  <td>{{ member.address || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <p class="table-count">Showing {{ filteredMembers.length }} of {{ members.length }} memberships</p>
+      }
+    </section>
+
+    <section class="content-card events-card" aria-labelledby="events-title">
+      <div class="section-heading">
+        <div>
+          <span class="section-kicker">2026–2027 CALENDAR</span>
+          <h2 id="events-title">Upcoming events</h2>
+          <p>Key dates and events planned by the association.</p>
+        </div>
+      </div>
+      <ol class="event-list">
+        @for (event of events; track event.name) {
+          <li>
+            <span class="event-marker" aria-hidden="true"></span>
+            <div>
+              <h3>{{ event.name }}</h3>
+              <p>{{ event.date }}</p>
+            </div>
+            @if (event.date === 'To be confirmed') {
+              <span class="event-status">TBC</span>
+            }
+          </li>
+        }
+      </ol>
+    </section>
+
+    <section class="feature-links pb-5" aria-label="Dashboard features">
+      <a routerLink="/admin/board-games">
+        <span class="feature-icon" aria-hidden="true">BG</span>
+        <span><strong>Board Games</strong><small>Registrations, filters, exports, and records</small></span>
+        <span class="feature-arrow" aria-hidden="true">→</span>
+      </a>
+      <a routerLink="/admin/renewals">
+        <span class="feature-icon" aria-hidden="true">MR</span>
+        <span><strong>Membership renewals</strong><small>Review and manage renewal submissions</small></span>
+        <span class="feature-arrow" aria-hidden="true">→</span>
+      </a>
+      <a routerLink="/admin/contact-details">
+        <span class="feature-icon" aria-hidden="true">CD</span>
+        <span><strong>Contact details Update</strong><small>Review member detail updates</small></span>
+        <span class="feature-arrow" aria-hidden="true">→</span>
+      </a>
+    </section>
+  }
+</main>

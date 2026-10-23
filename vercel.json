@@ -8,6 +8,9 @@
     "api/admin/registrations.mjs": {
       "includeFiles": "dist/mas/**"
     },
+    "api/admin/members.mjs": {
+      "includeFiles": "dist/mas/**"
+    },
     "api/admin/membership-renewals.mjs": {
       "includeFiles": "dist/mas/**"
     },
