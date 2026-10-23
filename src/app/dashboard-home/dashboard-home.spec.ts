@@ -83,6 +83,25 @@ describe('DashboardHome', () => {
     expect(csv).toContain('"20","\'=Formula","07123456789","member@example.com","1 Test Street"');
   });
 
+  it('uses the latest submitted contact address for its membership', async () => {
+    const dashboard = TestBed.createComponent(DashboardHome).componentInstance;
+    dashboard['members'] = [
+      { membershipNumber: '20', names: ['Member One'], phones: [], email: '' },
+    ];
+    spyOn(window, 'fetch').and.returnValue(
+      Promise.resolve(
+        new Response(JSON.stringify([
+          { membershipNumber: '20', address: 'Latest address' },
+          { membershipNumber: '20', address: 'Earlier address' },
+        ])),
+      ),
+    );
+
+    await dashboard['loadMemberAddresses']({ Authorization: 'Basic test' });
+
+    expect(dashboard['members'][0].address).toBe('Latest address');
+  });
+
   it('includes the full event calendar and registration navigation', () => {
     const fixture = TestBed.createComponent(DashboardHome);
     const dashboard = fixture.componentInstance;
