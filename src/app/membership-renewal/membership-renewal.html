@@ -1,0 +1,248 @@
+<main class="renewal-page">
+  <section class="renewal-card">
+    <header class="renewal-header">
+      <span class="eyebrow">MAS SOUTHAMPTON</span>
+      <h1>Membership Renewal Form 2026-27</h1>
+      <p>
+        Please update your personal and contact details to help us renew your
+        membership and plan upcoming events.
+      </p>
+      <p class="regards">Thank you for your cooperation. <span>— MAS Team 2026</span></p>
+    </header>
+
+    <form class="form-body" (submit)="submitRenewal($event)">
+      <section class="form-section">
+        <h2>Membership details</h2>
+        <p class="muted">Search with the mobile number recorded in the membership directory.</p>
+
+        <label class="field">
+          Mobile Number <span aria-hidden="true">*</span>
+          <input
+            name="mobileNumber"
+            type="tel"
+            [(ngModel)]="mobileNumber"
+            (input)="onMobileChanged()"
+            (blur)="lookupMember()"
+            autocomplete="tel"
+            required
+          />
+        </label>
+        <button
+          class="lookup-button"
+          type="button"
+          [disabled]="lookingUp || !mobileNumber.trim()"
+          (click)="lookupMember()"
+        >
+          {{ lookingUp ? 'Searching…' : 'Find my membership' }}
+        </button>
+<div class="row">
+        @if (memberOptions.length > 1) {
+  <div class="col-12 col-md-6">
+          <label class="field">
+            Select your name
+            <select
+              name="selectedMember"
+              [ngModel]="selectedMember"
+              (ngModelChange)="selectMember($event)"
+              required
+            >
+              <option [ngValue]="-1" disabled>Choose a member</option>
+              @for (member of memberOptions; track $index; let index = $index) {
+                <option [ngValue]="index">
+                  {{ member.name }} — Membership {{ member.membershipNumber }}
+                </option>
+              }
+            </select>
+          </label>
+        </div>
+        }
+  <div class="col-12 col-md-6">
+        <label class="field">
+          Membership Number <span aria-hidden="true">*</span>
+          <input
+            name="membershipNumber"
+            [(ngModel)]="membershipNumber"
+            (ngModelChange)="onMembershipNumberChanged()"
+            (blur)="lookupMembershipNumber()"
+            maxlength="50"
+            required
+          />
+          <span class="optional">If your mobile number is not in the directory, enter your membership number here.</span>
+        </label>
+</div>
+</div>
+        <div class="member-result" aria-live="polite">
+          <p><strong>Membership Holder:</strong> {{ membershipHolderName || 'Not found yet' }}</p>
+        </div>
+
+        <label class="field">
+          Email <span aria-hidden="true">*</span>
+          <input
+            name="email"
+            type="email"
+            [(ngModel)]="email"
+            autocomplete="email"
+            maxlength="254"
+            required
+          />
+        </label>
+
+        <fieldset class="membership-type">
+          <legend>Membership Renewal Type <span aria-hidden="true">*</span></legend>
+          <label>
+            <input
+              type="radio"
+              name="membershipType"
+              [(ngModel)]="membershipType"
+              value="individual"
+              required
+            />
+            Individual Membership — £20
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="membershipType"
+              [(ngModel)]="membershipType"
+              value="family"
+              required
+            />
+            Family Membership — £30
+          </label>
+        </fieldset>
+
+        <section class="payment-details" aria-labelledby="renewal-payment-title">
+          <h3 id="renewal-payment-title">Bank transfer payment</h3>
+          <p class="muted">
+            Please pay the membership fee by bank transfer. MAS will verify payments separately.
+            Use your membership number as the payment reference.
+          </p>
+          <dl>
+            <div><dt>Bank</dt><dd>Barclays</dd></div>
+            <div><dt>Account name</dt><dd>Malayalee Association of Southampton</dd></div>
+            <div><dt>Sort code</dt><dd>20-79-31</dd></div>
+            <div><dt>Account number</dt><dd>43328074</dd></div>
+            <div>
+              <dt>Payment reference</dt>
+              <dd>{{ membershipNumber || 'Your membership number' }}</dd>
+            </div>
+          </dl>
+        </section>
+      </section>
+
+      <section class="form-section">
+        <h2>Personal details</h2>
+        <p class="muted">Complete spouse and children's details if renewing a family membership.</p>
+
+        <label class="field">
+          Full Name of Membership Holder <span aria-hidden="true">*</span>
+          <input
+            name="membershipHolderName"
+            [(ngModel)]="membershipHolderName"
+            maxlength="120"
+            autocomplete="name"
+            required
+          />
+        </label>
+        <label class="field">
+          Your Age <span aria-hidden="true">*</span>
+          <input name="memberAge" type="number" min="0" max="120" [(ngModel)]="memberAge" required />
+        </label>
+
+        @if (membershipType === 'family') {
+          <label class="field">
+            Spouse Full Name <span class="optional">(optional)</span>
+            <input name="spouseName" [(ngModel)]="spouseName" maxlength="120" />
+          </label>
+          <label class="field">
+            Spouse Age <span class="optional">(optional)</span>
+            <input name="spouseAge" type="number" min="0" max="120" [(ngModel)]="spouseAge" />
+          </label>
+          @for (child of children; track $index; let index = $index) {
+            <div class="child-row">
+              <label class="field">
+                Child {{ index + 1 }} — Name
+                <input [name]="'childName' + index" [(ngModel)]="child.name" maxlength="120" />
+              </label>
+              <label class="field">
+                Age
+                <input
+                  [name]="'childAge' + index"
+                  type="number"
+                  min="0"
+                  max="120"
+                  [(ngModel)]="child.age"
+                />
+              </label>
+            </div>
+          }
+          <label class="field">
+            Any other family members and ages <span class="optional">(optional)</span>
+            <textarea name="otherFamilyMembers" [(ngModel)]="otherFamilyMembers" rows="3" maxlength="1000"></textarea>
+          </label>
+        }
+      </section>
+
+      <section class="form-section">
+        <h2>Contact information</h2>
+        <p class="muted">Please provide your current contact details.</p>
+        <label class="field">
+          UK Home Address <span class="optional">(optional)</span>
+          <textarea name="address" [(ngModel)]="address" rows="2" maxlength="500" autocomplete="street-address"></textarea>
+        </label>
+        <label class="field">
+          UK Post Code <span aria-hidden="true">*</span>
+          <input name="postcode" [(ngModel)]="postcode" required maxlength="12" autocomplete="postal-code" />
+        </label>
+        <label class="field">
+          Phone Number <span aria-hidden="true">*</span>
+          <input name="phone" type="tel" [(ngModel)]="phone" required maxlength="30" autocomplete="tel" />
+        </label>
+        @if (membershipType === 'family') {
+          <label class="field">
+            Spouse Phone Number <span class="optional">(optional)</span>
+            <input name="spousePhone" type="tel" [(ngModel)]="spousePhone" maxlength="30" />
+          </label>
+        }
+        <label class="field">
+          Any additional phone numbers and the person's name
+          <span class="optional">(optional)</span>
+          <textarea name="additionalPhones" [(ngModel)]="additionalPhones" rows="3" maxlength="500"></textarea>
+        </label>
+      </section>
+
+      <section class="form-section consent-section">
+        <h2>Data protection &amp; consent</h2>
+        <p>
+          MAS will use your information to plan and organise community events.
+          It will be handled confidentially, not shared with third parties, and
+          stored securely under applicable data-protection laws. You may request
+          access, correction, or deletion by contacting MAS.
+        </p>
+        <label class="consent">
+          <input name="consent" type="checkbox" [(ngModel)]="consent" required />
+          I confirm that I have read and agree to the data-protection statement.
+        </label>
+      </section>
+
+      @if (errorMessage) {
+        <p class="message error" role="alert">{{ errorMessage }}</p>
+      }
+      @if (successMessage) {
+        <p class="message success" role="status">{{ successMessage }}</p>
+      }
+
+      <button
+        class="submit-button"
+        type="submit"
+        [disabled]="submitting || submitted || !membershipNumber"
+      >
+        {{ submitting ? 'Submitting…' : submitted ? 'Submitted' : 'Submit renewal' }}
+      </button>
+      @if (!membershipNumber) {
+        <p class="muted submit-hint">Find your membership using your mobile number before submitting.</p>
+      }
+    </form>
+    <footer><a routerLink="/">Return to the MAS registration form</a></footer>
+  </section>
+</main>

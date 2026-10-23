@@ -8,6 +8,21 @@
     "api/admin/registrations.mjs": {
       "includeFiles": "dist/mas/**"
     },
+    "api/admin/membership-renewals.mjs": {
+      "includeFiles": "dist/mas/**"
+    },
+    "api/admin/membership-renewals/[id].mjs": {
+      "includeFiles": "dist/mas/**"
+    },
+    "api/admin/contact-details-updates.mjs": {
+      "includeFiles": "dist/mas/**"
+    },
+    "api/admin/contact-details-updates/[id].mjs": {
+      "includeFiles": "dist/mas/**"
+    },
+    "api/admin/contact-details-updates/clear-schedule.mjs": {
+      "includeFiles": "dist/mas/**"
+    },
     "api/admin/registrations/[id].mjs": {
       "includeFiles": "dist/mas/**"
     },

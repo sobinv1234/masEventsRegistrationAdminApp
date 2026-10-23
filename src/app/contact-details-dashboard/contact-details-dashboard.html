@@ -1,0 +1,170 @@
+  @if (loggedIn) {
+<nav class="navbar navbar-expand-lg navbar-custom">
+  <div class="container-fluid">
+    <a class="navbar-brand text-white" href="#">Home</a>
+    <button class="navbar-toggler bg-white" type="button" type="button"
+      data-bs-toggle="collapse"
+      data-bs-target="#navbarMenu"
+      aria-controls="navbarMenu"
+      aria-expanded="false"
+      aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarMenu">
+      <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+        <li class="nav-item px-md-2">
+           <a routerLink="/admin" class="nav-link text-white">Registrations</a>
+        </li>
+        <li class="nav-item px-md-2">
+            <a routerLink="/admin/renewals" class="nav-link text-white" aria-current="page">Renewal Members</a>
+        </li>
+        <li class="nav-item px-md-2">
+            <a routerLink="/admin/contact-details" class="nav-link text-white">Contact Details</a>
+        </li>
+        <li class="nav-item px-md-2">
+           <button type="button" class="btn btn-warning nav-link text-white" (click)="signOut()">Sign out</button>
+        </li>
+
+      </ul>
+    </div>
+  </div>
+</nav>
+  }
+<main class="dashboard-page">
+  <section class="dashboard-card">
+    <header class="dashboard-header">
+      <div>
+        <span class="eyebrow">MAS EXECUTIVE COMMITTEE</span>
+        <h1>Contact Details</h1>
+        <p>{{ records.length }} submission{{ records.length === 1 ? '' : 's' }}</p>
+      </div>
+      <div class="header-actions">
+        <button type="button" class="secondary" [disabled]="loading" (click)="refresh()">
+          {{ loading ? 'Loading…' : 'Refresh' }}
+        </button>
+        <button
+          type="button"
+          class="secondary"
+          [disabled]="loading || records.length === 0"
+          aria-label="Download contact details as an Excel-compatible CSV file"
+          (click)="downloadExcel()"
+        >
+          Download Excel
+        </button>
+        <button
+          type="button"
+          class="clear-data-button"
+          [disabled]="clearActionLoading || clearSchedule !== null"
+          (click)="requestClearAll()"
+        >
+          Clear all data
+        </button>
+      </div>
+    </header>
+
+    <section class="records">
+      @if (clearSchedule) {
+        <section class="scheduled-clear" role="status">
+          <div>
+            <strong>A contact-details clear is scheduled</strong>
+            <p>
+              Submissions received on or before {{ formatDate(clearSchedule.requestedAt) }}
+              will be deleted on or after {{ formatDate(clearSchedule.scheduledFor) }}.
+              Later submissions will be kept. The daily cleanup may run up to 24 hours later.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="cancel-scheduled-clear"
+            [disabled]="clearActionLoading"
+            (click)="cancelScheduledClear()"
+          >
+            {{ clearActionLoading ? 'Please wait…' : 'Cancel scheduled clear' }}
+          </button>
+        </section>
+      }
+
+      @if (errorMessage) {
+        <p class="error" role="alert">{{ errorMessage }}</p>
+      }
+      <label class="search">
+        Search contact updates
+        <input
+          type="search"
+          name="searchTerm"
+          [(ngModel)]="searchTerm"
+          placeholder="Name, membership number, phone, email, or address"
+        />
+      </label>
+
+      @if (loading && records.length === 0) {
+        <p class="empty-state">Loading contact-detail submissions…</p>
+      } @else if (!filteredRecords.length) {
+        <p class="empty-state">
+          {{ records.length ? 'No submissions match your search.' : 'No contact-detail submissions yet.' }}
+        </p>
+      } @else {
+        <div class="record-list">
+          @for (record of filteredRecords; track record.id) {
+            <article class="contact-record">
+              <header>
+                <div>
+                  <h2>{{ record.name }}</h2>
+                  <p>
+                    @if (record.membershipNumber) {
+                      Membership {{ record.membershipNumber }} ·
+                    } @else {
+                      No membership number found ·
+                    }
+                    {{ record.phone }}
+                  </p>
+                </div>
+                <time [attr.datetime]="record.createdAt">{{ formatDate(record.createdAt) }}</time>
+              </header>
+              <dl>
+                <div><dt>Email</dt><dd><a [href]="'mailto:' + record.email">{{ record.email }}</a></dd></div>
+                <div><dt>Address</dt><dd>{{ record.address }}</dd></div>
+                <div><dt>Consent</dt><dd>{{ record.consent ? 'Agreed' : 'Not agreed' }}</dd></div>
+              </dl>
+              <button
+                type="button"
+                class="delete-button"
+                [disabled]="deletingId !== null"
+                (click)="requestDelete(record)"
+                [attr.aria-label]="'Delete contact-details submission from ' + record.name"
+              >
+                Delete
+              </button>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  </section>
+</main>
+
+@if (confirmationDialog) {
+  <div class="confirmation-backdrop">
+    <section
+      class="confirmation-dialog"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="confirmation-title"
+      aria-describedby="confirmation-message"
+    >
+      <h2 id="confirmation-title">{{ confirmationDialog.title }}</h2>
+      <p id="confirmation-message">{{ confirmationDialog.message }}</p>
+      <div class="confirmation-actions">
+        <button type="button" class="cancel-button" (click)="cancelConfirmation()">Cancel</button>
+        <button
+          type="button"
+          class="delete-button"
+          [disabled]="clearActionLoading || deletingId !== null"
+          (click)="confirmDialogAction()"
+        >
+          {{ clearActionLoading || deletingId !== null ? 'Please wait…' : confirmationDialog.confirmLabel }}
+        </button>
+      </div>
+    </section>
+  </div>
+}

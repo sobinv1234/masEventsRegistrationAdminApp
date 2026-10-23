@@ -1,0 +1,275 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  background: #f1f5f2;
+  color: #20332e;
+  font-family: Arial, sans-serif;
+}
+
+.renewal-page {
+  padding: 40px 16px;
+}
+
+.renewal-card {
+  max-width: 760px;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid #dce5df;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 16px 48px rgb(22 69 56 / 8%);
+}
+
+.renewal-header {
+  padding: 28px;
+  background: #164538;
+  color: #fff;
+}
+
+.eyebrow {
+  font-size: 12px;
+  letter-spacing: 2px;
+}
+
+h1 {
+  margin: 8px 0;
+  font-size: clamp(27px, 7vw, 36px);
+}
+
+.renewal-header p {
+  line-height: 1.5;
+}
+
+.regards {
+  margin-bottom: 0;
+}
+
+.regards span {
+  color: #add8b9;
+}
+
+.form-body {
+  padding: 26px;
+}
+
+.form-section {
+  margin-bottom: 28px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e3ebe5;
+}
+
+h2 {
+  margin: 0 0 8px;
+  color: #164538;
+  font-size: 21px;
+}
+
+.muted,
+.optional {
+  color: #60736a;
+  font-size: 13px;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+.field {
+  display: block;
+  margin: 16px 0;
+  font-weight: 600;
+}
+
+.field input,
+.field select,
+.field textarea {
+  display: block;
+  width: 100%;
+  margin-top: 7px;
+  padding: 12px;
+  border: 1px solid #b9cbc1;
+  border-radius: 8px;
+  background: #fff;
+  color: #20332e;
+  font: inherit;
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+.field input:focus-visible,
+.field select:focus-visible,
+.field textarea:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid #8ab99a;
+  outline-offset: 2px;
+}
+
+.lookup-button,
+.submit-button {
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 8px;
+  background: #164538;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.member-result {
+  margin: 14px 0;
+  padding: 12px 16px;
+  border: 1px solid #d7e5dc;
+  border-radius: 8px;
+  background: #f8fbf8;
+}
+
+.member-result p {
+  margin: 3px 0;
+}
+
+.membership-type {
+  margin: 20px 0 10px;
+  padding: 14px;
+  border: 1px solid #d7e5dc;
+  border-radius: 8px;
+}
+
+.membership-type legend {
+  padding: 0 5px;
+  font-weight: 700;
+}
+
+.membership-type label {
+  display: block;
+  margin: 10px 0;
+}
+
+.membership-type input,
+.consent input {
+  margin-right: 8px;
+  accent-color: #164538;
+}
+
+.membership-type .muted {
+  margin-bottom: 0;
+}
+
+.payment-details {
+  margin-top: 20px;
+  padding: 18px;
+  border: 1px solid #d7e5dc;
+  border-radius: 10px;
+  background: #f8fbf8;
+}
+
+.payment-details h3 {
+  margin: 0 0 8px;
+  color: #164538;
+  font-size: 18px;
+}
+
+.payment-details > p {
+  margin: 8px 0;
+}
+
+.payment-details dl {
+  margin: 16px 0 0;
+}
+
+.payment-details dl div {
+  display: flex;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid #e3ebe5;
+}
+
+.payment-details dt {
+  flex: 0 0 140px;
+  font-weight: 700;
+}
+
+.payment-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.child-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 14px;
+}
+
+.consent-section > p {
+  color: #52665d;
+  line-height: 1.6;
+}
+
+.consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.5;
+  font-weight: 600;
+}
+
+.consent input {
+  flex: 0 0 auto;
+  margin-top: 4px;
+}
+
+.message {
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.error {
+  background: #fff0ee;
+  color: #8f1d14;
+}
+
+.success {
+  background: #e7f5eb;
+  color: #164538;
+}
+
+.submit-button {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.submit-hint {
+  text-align: center;
+}
+
+footer {
+  padding: 0 26px 26px;
+  text-align: center;
+}
+
+footer a {
+  color: #164538;
+  font-weight: 600;
+}
+
+@media (max-width: 560px) {
+  .renewal-page {
+    padding: 18px 10px;
+  }
+
+  .renewal-header,
+  .form-body {
+    padding: 22px 18px;
+  }
+
+  .child-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}

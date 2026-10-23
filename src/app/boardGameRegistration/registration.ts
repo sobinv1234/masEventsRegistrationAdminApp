@@ -1,12 +1,13 @@
 import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 
 type Game = 'Carroms' | 'Chess' | 'PlayStation' | 'Cards';
 type MembershipPhoneMatch = { membershipNumber: string; names: string[] };
 
 @Component({
   selector: 'app-registration',
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   templateUrl: './registration.html',
   styleUrl: './registration.scss',
 })

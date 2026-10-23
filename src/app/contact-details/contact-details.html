@@ -1,0 +1,116 @@
+<main class="contact-page">
+  <section class="contact-card">
+    <header class="contact-header">
+      <span class="eyebrow">MAS SOUTHAMPTON</span>
+      <h1>Update Your Contact Details</h1>
+      <p>
+        Help us complete or correct your member contact information. Enter your
+        phone number first to find your membership number and any details already
+        in our directory.
+      </p>
+    </header>
+
+    <form class="form-body" (submit)="submit($event)">
+      @if (submitted) {
+        <p class="message success" role="status">{{ successMessage }}</p>
+      } @else {
+        <label class="field">
+          Phone Number <span aria-hidden="true">*</span>
+          <input
+            name="phone"
+            type="tel"
+            [(ngModel)]="phone"
+            (ngModelChange)="onPhoneChanged()"
+            (blur)="lookupPhone()"
+            autocomplete="tel"
+            maxlength="30"
+            required
+          />
+        </label>
+        <button
+          class="lookup-button"
+          type="button"
+          [disabled]="lookingUp || !phone.trim()"
+          (click)="lookupPhone()"
+        >
+          {{ lookingUp ? 'Searching…' : 'Find my details' }}
+        </button>
+        @if (lookupMessage) {
+          <p class="lookup-message" role="status">{{ lookupMessage }}</p>
+        }
+        @if (errorMessage && !submitting) {
+          <p class="message error" role="alert">{{ errorMessage }}</p>
+        }
+
+        @if (matches.length > 1) {
+          <label class="field">
+            Select your name
+            <select
+              name="selectedMatch"
+              [ngModel]="selectedMatch"
+              (ngModelChange)="selectMatch($event)"
+              required
+            >
+              <option [ngValue]="-1" disabled>Choose a member</option>
+              @for (match of matches; track $index; let index = $index) {
+                <option [ngValue]="index">
+                  {{ match.name }} — Membership {{ match.membershipNumber }}
+                </option>
+              }
+            </select>
+          </label>
+        }
+
+        <div class="member-result" aria-live="polite">
+          <strong>Membership Number:</strong>
+          {{ membershipNumber || 'No matching membership number found' }}
+        </div>
+
+        <label class="field">
+          Full Name <span aria-hidden="true">*</span>
+          <input name="name" [(ngModel)]="name" autocomplete="name" maxlength="120" required />
+        </label>
+        <label class="field">
+          Email Address <span aria-hidden="true">*</span>
+          <input
+            name="email"
+            type="email"
+            [(ngModel)]="email"
+            autocomplete="email"
+            maxlength="254"
+            required
+          />
+        </label>
+        <label class="field">
+          Home Address <span aria-hidden="true">*</span>
+          <textarea
+            name="address"
+            [(ngModel)]="address"
+            autocomplete="street-address"
+            rows="3"
+            maxlength="500"
+            required
+          ></textarea>
+        </label>
+
+        <section class="privacy-section">
+          <h2>Privacy and consent</h2>
+          <p>
+            MAS will use these details to maintain its membership records and
+            contact members about community activities. Your information will be
+            stored securely and handled confidentially.
+          </p>
+          <label class="consent">
+            <input name="consent" type="checkbox" [(ngModel)]="consent" required />
+            I agree that MAS may use these details to update my membership records.
+          </label>
+        </section>
+
+        <button class="submit-button" type="submit" [disabled]="submitting">
+          {{ submitting ? 'Submitting…' : 'Submit contact details' }}
+        </button>
+      }
+    </form>
+    <footer><a routerLink="/">Return to the MAS registration form</a></footer>
+  </section>
+</main>

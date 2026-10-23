@@ -1,0 +1,201 @@
+  @if (loggedIn) {
+<nav class="navbar navbar-expand-lg navbar-custom">
+  <div class="container-fluid">
+    <a class="navbar-brand text-white" href="#">Home</a>
+    <button class="navbar-toggler bg-white" type="button" type="button"
+      data-bs-toggle="collapse"
+      data-bs-target="#navbarMenu"
+      aria-controls="navbarMenu"
+      aria-expanded="false"
+      aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarMenu">
+      <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+        <li class="nav-item px-md-2">
+           <a routerLink="/admin" class="nav-link text-white">Registrations</a>
+        </li>
+        <li class="nav-item px-md-2">
+            <a routerLink="/admin/renewals" class="nav-link text-white" aria-current="page">Renewal Members</a>
+        </li>
+        <li class="nav-item px-md-2">
+            <a routerLink="/admin/contact-details" class="nav-link text-white">Contact Details</a>
+        </li>
+        <li class="nav-item px-md-2">
+           <button type="button" class="btn btn-warning nav-link text-white" (click)="signOut()">Sign out</button>
+        </li>
+       
+      </ul>
+    </div>
+  </div>
+</nav>
+  }
+<main class="dashboard-page">
+  <section class="dashboard-card">
+    <header class="dashboard-header">
+      <div>
+        <span class="eyebrow">MAS EXECUTIVE COMMITTEE</span>
+        <h1>Membership Renewals 2026-27</h1>
+        <p>{{ records.length }} renewal {{ records.length === 1 ? 'record' : 'records' }}</p>
+      </div>
+      <div class="header-actions">
+        <button type="button" class="secondary" [disabled]="loading" (click)="refresh()">
+          {{ loading ? 'Loading…' : 'Refresh' }}
+        </button>
+        <button
+          type="button"
+          class="secondary"
+          [disabled]="loading || records.length === 0"
+          aria-label="Download all membership renewals as an Excel-compatible CSV file"
+          (click)="downloadExcel()"
+        >
+          Download Excel
+        </button>
+        <button
+          type="button"
+          class="clear-data-button"
+          [disabled]="clearActionLoading || clearSchedule !== null"
+          (click)="requestClearAll()"
+        >
+          Clear all data
+        </button>
+      </div>
+    </header>
+
+    <section class="records container">
+      @if (clearSchedule) {
+        <section class="scheduled-clear" role="status">
+          <div>
+            <strong>A renewal-data clear is scheduled</strong>
+            <p>
+              Renewals submitted on or before {{ formatDate(clearSchedule.requestedAt) }}
+              will be permanently removed on or after {{ formatDate(clearSchedule.scheduledFor) }}.
+              Renewals submitted later will be kept. The daily cleanup may run up to 24 hours
+              after the scheduled time.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="cancel-scheduled-clear"
+            [disabled]="clearActionLoading"
+            (click)="cancelScheduledClear()"
+          >
+            {{ clearActionLoading ? 'Please wait…' : 'Cancel scheduled clear' }}
+          </button>
+        </section>
+      }
+
+      @if (errorMessage) {
+        <p class="error" role="alert">{{ errorMessage }}</p>
+      }
+      <label class="search">
+        Search renewals
+        <input
+          type="search"
+          name="searchTerm"
+          [(ngModel)]="searchTerm"
+          placeholder="Name, membership number, email, phone, or postcode"
+        />
+      </label>
+
+      @if (loading && records.length === 0) {
+        <p class="empty-state">Loading renewal records…</p>
+      } @else if (filteredRecords.length === 0) {
+        <p class="empty-state">
+          {{ records.length ? 'No renewals match your search.' : 'No membership renewals have been submitted yet.' }}
+        </p>
+      } @else {
+        <div class="renewal-list">
+          @for (record of filteredRecords; track record.id) {
+            <article class="renewal-record">
+              <header>
+                <div>
+                  <h2>{{ record.membershipHolderName }}</h2>
+                  <p>
+                    Membership {{ record.membershipNumber }} ·
+                    {{ record.membershipType === 'family' ? 'Family — £30' : 'Individual — £20' }}
+                  </p>
+                </div>
+                <time [attr.datetime]="record.createdAt">{{ formatDate(record.createdAt) }}</time>
+                <button
+                  type="button"
+                  class="delete-button"
+                  [disabled]="deletingId !== null"
+                  (click)="requestDelete(record)"
+                  [attr.aria-label]="'Delete renewal for ' + record.membershipHolderName"
+                >
+                  Delete
+                </button>
+              </header>
+              <dl>
+                <div><dt>Age</dt><dd>{{ record.memberAge }}</dd></div>
+                <div><dt>Email</dt><dd>{{ record.email }}</dd></div>
+                <div><dt>Phone</dt><dd>{{ record.phone }}</dd></div>
+                <div><dt>Address</dt><dd>{{ record.address || 'Not provided' }}</dd></div>
+                <div><dt>Postcode</dt><dd>{{ record.postcode }}</dd></div>
+                @if (record.membershipType === 'family') {
+                  <div>
+                    <dt>Spouse</dt>
+                    <dd>
+                      {{ record.spouseName || 'Not provided' }}
+                      @if (record.spouseAge !== null) { ({{ record.spouseAge }}) }
+                    </dd>
+                  </div>
+                  @for (child of record.children; track $index; let index = $index) {
+                    @if (child.name) {
+                      <div>
+                        <dt>Child {{ index + 1 }}</dt>
+                        <dd>{{ child.name }}@if (child.age !== null) { ({{ child.age }}) }</dd>
+                      </div>
+                    }
+                  }
+                  @if (record.otherFamilyMembers) {
+                    <div><dt>Other family</dt><dd>{{ record.otherFamilyMembers }}</dd></div>
+                  }
+                  @if (record.spousePhone) {
+                    <div><dt>Spouse phone</dt><dd>{{ record.spousePhone }}</dd></div>
+                  }
+                }
+                @if (record.additionalPhones) {
+                  <div><dt>Additional phones</dt><dd>{{ record.additionalPhones }}</dd></div>
+                }
+              </dl>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  </section>
+</main>
+
+@if (confirmationDialog) {
+  <div class="confirmation-backdrop">
+    <section
+      class="confirmation-dialog"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="renewal-confirmation-title"
+      aria-describedby="renewal-confirmation-message"
+    >
+      <h2 id="renewal-confirmation-title">{{ confirmationDialog.title }}</h2>
+      <p id="renewal-confirmation-message">{{ confirmationDialog.message }}</p>
+      <div class="confirmation-actions">
+        <button type="button" class="cancel-delete-button" (click)="cancelConfirmation()">
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="delete-button"
+          [disabled]="clearActionLoading || deletingId !== null"
+          (click)="confirmDialogAction()"
+        >
+          {{
+            clearActionLoading || deletingId !== null
+              ? 'Please wait…'
+              : confirmationDialog.confirmLabel
+          }}
+        </button>
+      </div>
+    </section>
+  </div>
+}

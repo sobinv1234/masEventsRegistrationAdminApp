@@ -1,0 +1,269 @@
+:host {
+  display: block;
+  min-height: 100vh;
+  background: #f1f5f2;
+  color: #20332e;
+  font-family: Arial, sans-serif;
+}
+
+.navbar-custom {
+    background-color: rgb(28 34 32) !important;
+}
+nav a{
+  background-color: transparent;
+}
+.dashboard-card {
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid #dce5df;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 16px 48px rgb(22 69 56 / 8%);
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 26px;
+  background: #164538;
+  color: #fff;
+}
+
+.eyebrow {
+  font-size: 12px;
+  letter-spacing: 2px;
+}
+
+h1 {
+  margin: 8px 0;
+  font-size: clamp(25px, 5vw, 34px);
+}
+
+.dashboard-header p {
+  margin: 0;
+  color: #e3efe8;
+}
+
+nav,
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+nav a {
+  padding: 9px 12px;
+  border-radius: 7px;
+  color: #fff;
+  text-decoration: none;
+}
+
+nav a[aria-current='page'] {
+  background: rgb(255 255 255 / 18%);
+}
+
+button {
+  padding: 11px 16px;
+  border: 1px solid #e3efe8;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.clear-data-button,
+.delete-button {
+  border: 1px solid #f0b9b4;
+  background: #8f1d14;
+  color: #fff;
+}
+
+.records {
+  padding: 26px;
+}
+
+.scheduled-clear {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 16px;
+  border: 1px solid #e5b54a;
+  border-radius: 10px;
+  background: #fff8e5;
+  color: #513d0b;
+}
+
+.scheduled-clear p {
+  margin: 6px 0 0;
+}
+
+.cancel-scheduled-clear {
+  flex: 0 0 auto;
+  border-color: #80600d;
+  background: #fff;
+  color: #513d0b;
+}
+
+.search {
+  display: block;
+  max-width: 540px;
+  margin-bottom: 24px;
+  font-weight: 600;
+}
+
+.search input {
+  display: block;
+  width: 100%;
+  margin-top: 7px;
+  padding: 12px;
+  border: 1px solid #b9cbc1;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.renewal-list {
+  display: grid;
+  gap: 16px;
+}
+
+.renewal-record {
+  padding: 20px;
+  border: 1px solid #dce5df;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.renewal-record header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e3ebe5;
+}
+
+.renewal-record h2 {
+  margin: 0 0 5px;
+  color: #164538;
+}
+
+.renewal-record header p,
+time {
+  margin: 0;
+  color: #60736a;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 20px;
+  margin: 16px 0 0;
+}
+
+dl div {
+  min-width: 0;
+}
+
+dt {
+  color: #60736a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.empty-state {
+  padding: 30px;
+  border-radius: 10px;
+  background: #f8fbf8;
+  color: #60736a;
+  text-align: center;
+}
+
+.error {
+  padding: 12px;
+  border-radius: 8px;
+  background: #fff0ee;
+  color: #8f1d14;
+}
+
+.confirmation-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(12 28 22 / 55%);
+}
+
+.confirmation-dialog {
+  width: min(100%, 480px);
+  padding: 24px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 22%);
+}
+
+.confirmation-dialog h2 {
+  margin: 0 0 10px;
+  color: #164538;
+}
+
+.confirmation-dialog p {
+  color: #52665d;
+  line-height: 1.5;
+}
+
+.confirmation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.cancel-delete-button {
+  border-color: #b9cbc1;
+  background: #fff;
+  color: #20332e;
+}
+
+@media (max-width: 640px) {
+  .dashboard-page {
+    padding: 18px 10px;
+  }
+
+  .dashboard-header,
+  .records {
+    padding: 20px;
+  }
+
+  .renewal-record header {
+    flex-direction: column;
+  }
+
+  .scheduled-clear {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  dl {
+    grid-template-columns: 1fr;
+  }
+}

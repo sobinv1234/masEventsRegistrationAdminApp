@@ -19,6 +19,10 @@ import type { DatabaseSync as SqliteDatabase } from 'node:sqlite';
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { membershipDirectory } from './membership-directory';
+import {
+  getMembershipNames,
+  getMembershipPhoneNumbers,
+} from './membership-family-directory';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
 const require = createRequire(import.meta.url);
@@ -44,6 +48,36 @@ type RegistrationInput = Omit<Registration, 'id' | 'createdAt' | 'games' | 'emai
 type RegistrationClearSchedule = {
   requestedAt: string;
   scheduledFor: string;
+};
+type RenewalChild = { name: string; age: number | null };
+type MembershipRenewal = {
+  id: string;
+  createdAt: string;
+  email: string;
+  membershipType: 'individual' | 'family';
+  membershipNumber: string;
+  membershipHolderName: string;
+  memberAge: number;
+  spouseName: string;
+  spouseAge: number | null;
+  children: RenewalChild[];
+  otherFamilyMembers: string;
+  address: string;
+  postcode: string;
+  phone: string;
+  spousePhone: string;
+  additionalPhones: string;
+  consent: true;
+};
+type ContactDetailsUpdate = {
+  id: string;
+  createdAt: string;
+  phone: string;
+  membershipNumber: string;
+  name: string;
+  email: string;
+  address: string;
+  consent: true;
 };
 
 const app = express();
@@ -81,6 +115,26 @@ function getSqliteDatabase(): SqliteDatabase {
       schedule_key TEXT PRIMARY KEY,
       requested_at TEXT NOT NULL,
       scheduled_for TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS membership_renewals (
+      id TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL,
+      renewal_data TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS membership_renewal_clear_schedule (
+      schedule_key TEXT PRIMARY KEY,
+      requested_at TEXT NOT NULL,
+      scheduled_for TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS contact_details_updates (
+      id TEXT PRIMARY KEY,
+      created_at TEXT NOT NULL,
+      update_data TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS contact_details_clear_schedule (
+      schedule_key TEXT PRIMARY KEY,
+      requested_at TEXT NOT NULL,
+      scheduled_for TEXT NOT NULL
     )
   `);
   chmodSync(databasePath, 0o600);
@@ -106,6 +160,34 @@ async function ensureNeonSchema(): Promise<void> {
     )`
       .then(() =>
         getNeonSql()`CREATE TABLE IF NOT EXISTS registration_clear_schedule (
+          schedule_key TEXT PRIMARY KEY,
+          requested_at TEXT NOT NULL,
+          scheduled_for TEXT NOT NULL
+        )`,
+      )
+      .then(() =>
+        getNeonSql()`CREATE TABLE IF NOT EXISTS membership_renewals (
+          id TEXT PRIMARY KEY,
+          created_at TEXT NOT NULL,
+          renewal_data TEXT NOT NULL
+        )`,
+      )
+      .then(() =>
+        getNeonSql()`CREATE TABLE IF NOT EXISTS membership_renewal_clear_schedule (
+          schedule_key TEXT PRIMARY KEY,
+          requested_at TEXT NOT NULL,
+          scheduled_for TEXT NOT NULL
+        )`,
+      )
+      .then(() =>
+        getNeonSql()`CREATE TABLE IF NOT EXISTS contact_details_updates (
+          id TEXT PRIMARY KEY,
+          created_at TEXT NOT NULL,
+          update_data TEXT NOT NULL
+        )`,
+      )
+      .then(() =>
+        getNeonSql()`CREATE TABLE IF NOT EXISTS contact_details_clear_schedule (
           schedule_key TEXT PRIMARY KEY,
           requested_at TEXT NOT NULL,
           scheduled_for TEXT NOT NULL
@@ -185,6 +267,380 @@ async function getRegistrations(): Promise<StoredRegistrationRow[]> {
       registration_data: row['registration_data'],
       email_sent: row['email_sent'],
     }));
+}
+
+async function saveMembershipRenewal(
+  renewal: MembershipRenewal,
+  key: Buffer,
+): Promise<void> {
+  const renewalData = encryptJson(renewal, key);
+  if (process.env['DATABASE_URL']) {
+    await ensureNeonSchema();
+    await getNeonSql()`INSERT INTO membership_renewals
+      (id, created_at, renewal_data)
+      VALUES (${renewal.id}, ${renewal.createdAt}, ${renewalData})`;
+    return;
+  }
+
+  getSqliteDatabase()
+    .prepare(
+      `INSERT INTO membership_renewals (id, created_at, renewal_data)
+       VALUES (?, ?, ?)`,
+    )
+    .run(renewal.id, renewal.createdAt, renewalData);
+}
+
+async function getMembershipRenewals(key: Buffer): Promise<MembershipRenewal[]> {
+  if (process.env['DATABASE_URL']) {
+    await ensureNeonSchema();
+    const rows = await getNeonSql()`SELECT renewal_data
+      FROM membership_renewals
+      ORDER BY created_at DESC
+      LIMIT 1000`;
+    return rows.map((row) =>
+      decryptMembershipRenewal(String(row['renewal_data']), key),
+    );
+  }
+
+  return getSqliteDatabase()
+    .prepare(
+      `SELECT renewal_data
+       FROM membership_renewals
+       ORDER BY created_at DESC
+       LIMIT 1000`,
+    )
+    .all()
+    .map((row) =>
+      decryptMembershipRenewal(String(row['renewal_data']), key),
+    );
+}
+
+async function removeMembershipRenewal(renewalId: string): Promise<boolean> {
+    if (process.env['DATABASE_URL']) {
+      await ensureNeonSchema();
+      const rows = await getNeonSql()`DELETE FROM membership_renewals
+        WHERE id = ${renewalId}
+        RETURNING id`;
+      return rows.length > 0;
+    }
+
+    const result = getSqliteDatabase()
+      .prepare('DELETE FROM membership_renewals WHERE id = ?')
+      .run(renewalId);
+    return result.changes > 0;
+}
+
+async function getMembershipRenewalClearSchedule(): Promise<RegistrationClearSchedule | null> {
+    if (process.env['DATABASE_URL']) {
+      await ensureNeonSchema();
+      const rows = await getNeonSql()`SELECT requested_at, scheduled_for
+        FROM membership_renewal_clear_schedule
+        WHERE schedule_key = 'all'
+        LIMIT 1`;
+      const row = rows[0];
+      return row
+        ? {
+            requestedAt: String(row['requested_at']),
+            scheduledFor: String(row['scheduled_for']),
+          }
+        : null;
+    }
+
+    const row = getSqliteDatabase()
+      .prepare(
+        `SELECT requested_at, scheduled_for
+         FROM membership_renewal_clear_schedule
+         WHERE schedule_key = ?`,
+      )
+      .get('all');
+    return row
+      ? {
+          requestedAt: String(row['requested_at']),
+          scheduledFor: String(row['scheduled_for']),
+        }
+      : null;
+}
+
+async function scheduleMembershipRenewalClear(): Promise<RegistrationClearSchedule | null> {
+    const requestedAt = new Date();
+    const schedule: RegistrationClearSchedule = {
+      requestedAt: requestedAt.toISOString(),
+      scheduledFor: new Date(
+        requestedAt.getTime() + 10 * 24 * 60 * 60 * 1000,
+      ).toISOString(),
+    };
+
+    if (process.env['DATABASE_URL']) {
+      await ensureNeonSchema();
+      const rows = await getNeonSql()`INSERT INTO membership_renewal_clear_schedule
+        (schedule_key, requested_at, scheduled_for)
+        VALUES ('all', ${schedule.requestedAt}, ${schedule.scheduledFor})
+        ON CONFLICT (schedule_key) DO NOTHING
+        RETURNING requested_at, scheduled_for`;
+      const row = rows[0];
+      return row
+        ? {
+            requestedAt: String(row['requested_at']),
+            scheduledFor: String(row['scheduled_for']),
+          }
+        : null;
+    }
+
+    const result = getSqliteDatabase()
+      .prepare(
+        `INSERT OR IGNORE INTO membership_renewal_clear_schedule
+          (schedule_key, requested_at, scheduled_for)
+         VALUES (?, ?, ?)`,
+      )
+      .run('all', schedule.requestedAt, schedule.scheduledFor);
+    return result.changes > 0 ? schedule : null;
+}
+
+async function cancelMembershipRenewalClear(): Promise<boolean> {
+    if (process.env['DATABASE_URL']) {
+      await ensureNeonSchema();
+      const rows = await getNeonSql()`DELETE FROM membership_renewal_clear_schedule
+        WHERE schedule_key = 'all'
+        RETURNING schedule_key`;
+      return rows.length > 0;
+    }
+
+    const result = getSqliteDatabase()
+      .prepare(
+        'DELETE FROM membership_renewal_clear_schedule WHERE schedule_key = ?',
+      )
+      .run('all');
+    return result.changes > 0;
+}
+
+async function clearMembershipRenewalsIfDue(): Promise<number> {
+    const now = new Date().toISOString();
+    if (process.env['DATABASE_URL']) {
+      await ensureNeonSchema();
+      const rows = await getNeonSql()`WITH due_schedule AS MATERIALIZED (
+          SELECT schedule_key, requested_at
+          FROM membership_renewal_clear_schedule
+          WHERE schedule_key = 'all' AND scheduled_for <= ${now}
+          FOR UPDATE
+        ),
+        deleted AS (
+          DELETE FROM membership_renewals
+          USING due_schedule
+          WHERE membership_renewals.created_at <= due_schedule.requested_at
+          RETURNING membership_renewals.id
+        ),
+        removed_schedule AS (
+          DELETE FROM membership_renewal_clear_schedule
+          USING due_schedule
+          WHERE membership_renewal_clear_schedule.schedule_key = due_schedule.schedule_key
+          RETURNING membership_renewal_clear_schedule.schedule_key
+        )
+        SELECT COUNT(*)::int AS deleted_count FROM deleted`;
+      return Number(rows[0]?.['deleted_count'] ?? 0);
+    }
+
+    const localDatabase = getSqliteDatabase();
+    localDatabase.exec('BEGIN IMMEDIATE');
+    try {
+      const schedule = localDatabase
+        .prepare(
+          `SELECT requested_at, scheduled_for
+           FROM membership_renewal_clear_schedule
+           WHERE schedule_key = ?`,
+        )
+        .get('all');
+      if (!schedule || String(schedule['scheduled_for']) > now) {
+        localDatabase.exec('COMMIT');
+        return 0;
+      }
+
+      const result = localDatabase
+        .prepare('DELETE FROM membership_renewals WHERE created_at <= ?')
+        .run(String(schedule['requested_at']));
+      localDatabase
+        .prepare(
+          'DELETE FROM membership_renewal_clear_schedule WHERE schedule_key = ?',
+        )
+        .run('all');
+      localDatabase.exec('COMMIT');
+      return Number(result.changes);
+    } catch (error) {
+      localDatabase.exec('ROLLBACK');
+      throw error;
+    }
+}
+
+async function saveContactDetailsUpdate(
+    update: ContactDetailsUpdate,
+    key: Buffer,
+): Promise<void> {
+    const updateData = encryptJson(update, key);
+    if (process.env['DATABASE_URL']) {
+      await ensureNeonSchema();
+      await getNeonSql()`INSERT INTO contact_details_updates
+        (id, created_at, update_data)
+        VALUES (${update.id}, ${update.createdAt}, ${updateData})`;
+      return;
+    }
+    getSqliteDatabase()
+      .prepare(
+        `INSERT INTO contact_details_updates (id, created_at, update_data)
+         VALUES (?, ?, ?)`,
+      )
+      .run(update.id, update.createdAt, updateData);
+}
+
+async function getContactDetailsUpdates(key: Buffer): Promise<ContactDetailsUpdate[]> {
+    if (process.env['DATABASE_URL']) {
+      await ensureNeonSchema();
+      const rows = await getNeonSql()`SELECT update_data
+        FROM contact_details_updates
+        ORDER BY created_at DESC
+        LIMIT 1000`;
+      return rows.map((row) => decryptContactDetailsUpdate(String(row['update_data']), key));
+    }
+    return getSqliteDatabase()
+      .prepare(
+        `SELECT update_data
+         FROM contact_details_updates
+         ORDER BY created_at DESC
+         LIMIT 1000`,
+      )
+      .all()
+      .map((row) => decryptContactDetailsUpdate(String(row['update_data']), key));
+}
+
+async function removeContactDetailsUpdate(updateId: string): Promise<boolean> {
+    if (process.env['DATABASE_URL']) {
+      await ensureNeonSchema();
+      const rows = await getNeonSql()`DELETE FROM contact_details_updates
+        WHERE id = ${updateId}
+        RETURNING id`;
+      return rows.length > 0;
+    }
+    const result = getSqliteDatabase()
+      .prepare('DELETE FROM contact_details_updates WHERE id = ?')
+      .run(updateId);
+    return result.changes > 0;
+}
+
+async function getContactDetailsClearSchedule(): Promise<RegistrationClearSchedule | null> {
+    if (process.env['DATABASE_URL']) {
+      await ensureNeonSchema();
+      const rows = await getNeonSql()`SELECT requested_at, scheduled_for
+        FROM contact_details_clear_schedule
+        WHERE schedule_key = 'all'
+        LIMIT 1`;
+      const row = rows[0];
+      return row
+        ? { requestedAt: String(row['requested_at']), scheduledFor: String(row['scheduled_for']) }
+        : null;
+    }
+    const row = getSqliteDatabase()
+      .prepare(
+        `SELECT requested_at, scheduled_for
+         FROM contact_details_clear_schedule
+         WHERE schedule_key = ?`,
+      )
+      .get('all');
+    return row
+      ? { requestedAt: String(row['requested_at']), scheduledFor: String(row['scheduled_for']) }
+      : null;
+}
+
+async function scheduleContactDetailsClear(): Promise<RegistrationClearSchedule | null> {
+    const requestedAt = new Date();
+    const schedule: RegistrationClearSchedule = {
+      requestedAt: requestedAt.toISOString(),
+      scheduledFor: new Date(requestedAt.getTime() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+    if (process.env['DATABASE_URL']) {
+      await ensureNeonSchema();
+      const rows = await getNeonSql()`INSERT INTO contact_details_clear_schedule
+        (schedule_key, requested_at, scheduled_for)
+        VALUES ('all', ${schedule.requestedAt}, ${schedule.scheduledFor})
+        ON CONFLICT (schedule_key) DO NOTHING
+        RETURNING requested_at, scheduled_for`;
+      const row = rows[0];
+      return row
+        ? { requestedAt: String(row['requested_at']), scheduledFor: String(row['scheduled_for']) }
+        : null;
+    }
+    const result = getSqliteDatabase()
+      .prepare(
+        `INSERT OR IGNORE INTO contact_details_clear_schedule
+          (schedule_key, requested_at, scheduled_for)
+         VALUES (?, ?, ?)`,
+      )
+      .run('all', schedule.requestedAt, schedule.scheduledFor);
+    return result.changes > 0 ? schedule : null;
+}
+
+async function cancelContactDetailsClear(): Promise<boolean> {
+    if (process.env['DATABASE_URL']) {
+      await ensureNeonSchema();
+      const rows = await getNeonSql()`DELETE FROM contact_details_clear_schedule
+        WHERE schedule_key = 'all'
+        RETURNING schedule_key`;
+      return rows.length > 0;
+    }
+    const result = getSqliteDatabase()
+      .prepare('DELETE FROM contact_details_clear_schedule WHERE schedule_key = ?')
+      .run('all');
+    return result.changes > 0;
+}
+
+async function clearContactDetailsIfDue(): Promise<number> {
+    const now = new Date().toISOString();
+    if (process.env['DATABASE_URL']) {
+      await ensureNeonSchema();
+      const rows = await getNeonSql()`WITH due_schedule AS MATERIALIZED (
+          SELECT schedule_key, requested_at
+          FROM contact_details_clear_schedule
+          WHERE schedule_key = 'all' AND scheduled_for <= ${now}
+          FOR UPDATE
+        ),
+        deleted AS (
+          DELETE FROM contact_details_updates
+          USING due_schedule
+          WHERE contact_details_updates.created_at <= due_schedule.requested_at
+          RETURNING contact_details_updates.id
+        ),
+        removed_schedule AS (
+          DELETE FROM contact_details_clear_schedule
+          USING due_schedule
+          WHERE contact_details_clear_schedule.schedule_key = due_schedule.schedule_key
+          RETURNING contact_details_clear_schedule.schedule_key
+        )
+        SELECT COUNT(*)::int AS deleted_count FROM deleted`;
+      return Number(rows[0]?.['deleted_count'] ?? 0);
+    }
+    const localDatabase = getSqliteDatabase();
+    localDatabase.exec('BEGIN IMMEDIATE');
+    try {
+      const schedule = localDatabase
+        .prepare(
+          `SELECT requested_at, scheduled_for
+           FROM contact_details_clear_schedule
+           WHERE schedule_key = ?`,
+        )
+        .get('all');
+      if (!schedule || String(schedule['scheduled_for']) > now) {
+        localDatabase.exec('COMMIT');
+        return 0;
+      }
+      const result = localDatabase
+        .prepare('DELETE FROM contact_details_updates WHERE created_at <= ?')
+        .run(String(schedule['requested_at']));
+      localDatabase
+        .prepare('DELETE FROM contact_details_clear_schedule WHERE schedule_key = ?')
+        .run('all');
+      localDatabase.exec('COMMIT');
+      return Number(result.changes);
+    } catch (error) {
+      localDatabase.exec('ROLLBACK');
+      throw error;
+    }
 }
 
 async function getRegistration(
@@ -546,10 +1002,14 @@ function getRegistrationConfigurationIssues(): string[] {
 }
 
 function encryptRegistration(registration: Registration, key: Buffer): string {
+  return encryptJson(registration, key);
+}
+
+function encryptJson(value: unknown, key: Buffer): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', key, iv);
   const ciphertext = Buffer.concat([
-    cipher.update(JSON.stringify(registration), 'utf8'),
+    cipher.update(JSON.stringify(value), 'utf8'),
     cipher.final(),
   ]);
   return JSON.stringify({
@@ -557,6 +1017,101 @@ function encryptRegistration(registration: Registration, key: Buffer): string {
     tag: cipher.getAuthTag().toString('base64'),
     ciphertext: ciphertext.toString('base64'),
   });
+}
+
+function decryptJson(encodedData: string, key: Buffer): unknown {
+  const envelope: unknown = JSON.parse(encodedData);
+  if (
+    !isRecord(envelope) ||
+    typeof envelope['iv'] !== 'string' ||
+    typeof envelope['tag'] !== 'string' ||
+    typeof envelope['ciphertext'] !== 'string'
+  ) {
+    throw new Error('Stored encrypted data is invalid.');
+  }
+
+  const decipher = createDecipheriv(
+    'aes-256-gcm',
+    key,
+    Buffer.from(envelope['iv'], 'base64'),
+  );
+  decipher.setAuthTag(Buffer.from(envelope['tag'], 'base64'));
+  const plaintext = Buffer.concat([
+    decipher.update(Buffer.from(envelope['ciphertext'], 'base64')),
+    decipher.final(),
+  ]).toString('utf8');
+  return JSON.parse(plaintext);
+}
+
+function decryptMembershipRenewal(
+  encodedData: string,
+  key: Buffer,
+): MembershipRenewal {
+  const value = decryptJson(encodedData, key);
+  if (!isMembershipRenewal(value)) {
+    throw new Error('Stored membership renewal data is invalid.');
+  }
+  return value;
+}
+
+function isMembershipRenewal(value: unknown): value is MembershipRenewal {
+  return (
+    isRecord(value) &&
+    typeof value['id'] === 'string' &&
+    typeof value['createdAt'] === 'string' &&
+    typeof value['email'] === 'string' &&
+    (value['membershipType'] === 'individual' ||
+      value['membershipType'] === 'family') &&
+    typeof value['membershipNumber'] === 'string' &&
+    typeof value['membershipHolderName'] === 'string' &&
+    typeof value['memberAge'] === 'number' &&
+    typeof value['spouseName'] === 'string' &&
+    (value['spouseAge'] === null || typeof value['spouseAge'] === 'number') &&
+    Array.isArray(value['children']) &&
+    value['children'].every(
+      (child) =>
+        isRecord(child) &&
+        typeof child['name'] === 'string' &&
+        (child['age'] === null || typeof child['age'] === 'number'),
+    ) &&
+    typeof value['otherFamilyMembers'] === 'string' &&
+    typeof value['address'] === 'string' &&
+    typeof value['postcode'] === 'string' &&
+    typeof value['phone'] === 'string' &&
+    typeof value['spousePhone'] === 'string' &&
+    typeof value['additionalPhones'] === 'string' &&
+    value['consent'] === true
+  );
+}
+
+function decryptContactDetailsUpdate(
+  encodedData: string,
+  key: Buffer,
+): ContactDetailsUpdate {
+  const value = decryptJson(encodedData, key);
+  if (
+    !isRecord(value) ||
+    typeof value['id'] !== 'string' ||
+    typeof value['createdAt'] !== 'string' ||
+    typeof value['phone'] !== 'string' ||
+    typeof value['membershipNumber'] !== 'string' ||
+    typeof value['name'] !== 'string' ||
+    typeof value['email'] !== 'string' ||
+    typeof value['address'] !== 'string' ||
+    value['consent'] !== true
+  ) {
+    throw new Error('Stored contact details update data is invalid.');
+  }
+  return {
+    id: value['id'],
+    createdAt: value['createdAt'],
+    phone: value['phone'],
+    membershipNumber: value['membershipNumber'],
+    name: value['name'],
+    email: value['email'],
+    address: value['address'],
+    consent: true,
+  };
 }
 
 function decryptRegistration(
@@ -853,7 +1408,12 @@ app.post('/api/membership-lookup', (req, res) => {
   }
 
   res.setHeader('Cache-Control', 'no-store');
-  res.json({ names: membershipDirectory[normalizedMembershipNumber].names });
+  res.json({
+    names: getMembershipNames(
+      normalizedMembershipNumber,
+      membershipDirectory[normalizedMembershipNumber].names,
+    ),
+  });
 });
 
 app.post('/api/membership-phone-lookup', (req, res) => {
@@ -870,12 +1430,15 @@ app.post('/api/membership-phone-lookup', (req, res) => {
 
   const matches = Object.entries(membershipDirectory)
     .filter(
-      ([, member]) =>
-        member.phone && normalizePhoneNumber(member.phone) === normalizedPhone,
+      ([membershipNumber, member]) =>
+        getMembershipPhoneNumbers(
+          membershipNumber,
+          member.phone,
+        ).some((phone) => normalizePhoneNumber(phone) === normalizedPhone),
     )
     .map(([membershipNumber, member]) => ({
       membershipNumber,
-      names: member.names,
+      names: getMembershipNames(membershipNumber, member.names),
     }));
 
   res.setHeader('Cache-Control', 'no-store');
@@ -884,6 +1447,174 @@ app.post('/api/membership-phone-lookup', (req, res) => {
     return;
   }
   res.json({ matches });
+});
+
+app.post('/api/contact-details-updates', async (req, res, next) => {
+  const value = req.body;
+  if (
+    !isRecord(value) ||
+    typeof value['phone'] !== 'string' ||
+    typeof value['membershipNumber'] !== 'string' ||
+    typeof value['name'] !== 'string' ||
+    typeof value['email'] !== 'string' ||
+    typeof value['address'] !== 'string' ||
+    value['consent'] !== true
+  ) {
+    res.status(400).json({ message: 'Please complete all required contact-detail fields.' });
+    return;
+  }
+
+  const phone = value['phone'].trim();
+  const membershipNumber = value['membershipNumber'].trim().replace(/^0+(?=\d)/, '');
+  const name = value['name'].trim();
+  const email = value['email'].trim();
+  const address = value['address'].trim();
+  const normalizedPhone = normalizePhoneNumber(phone);
+  const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  if (
+    normalizedPhone.length < 7 ||
+    normalizedPhone.length > 15 ||
+    !name ||
+    name.length > 120 ||
+    !validEmail ||
+    email.length > 254 ||
+    !address ||
+    address.length > 500 ||
+    (membershipNumber !== '' && !Object.hasOwn(membershipDirectory, membershipNumber))
+  ) {
+    res.status(400).json({ message: 'Please check the phone, name, email, and address.' });
+    return;
+  }
+
+  const encryptionKey = getEncryptionKey();
+  if (!encryptionKey || !hasPersistentStorageConfigured()) {
+    res.status(503).json({ message: 'Secure contact-detail storage is not configured.' });
+    return;
+  }
+  try {
+    const update: ContactDetailsUpdate = {
+      id: randomUUID(),
+      createdAt: new Date().toISOString(),
+      phone,
+      membershipNumber,
+      name,
+      email,
+      address,
+      consent: true,
+    };
+    await saveContactDetailsUpdate(update, encryptionKey);
+    res.status(201).json({
+      message: 'Thank you. Your contact details have been submitted.',
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/membership-renewals', async (req, res, next) => {
+  const value = req.body;
+  if (
+    !isRecord(value) ||
+    typeof value['membershipNumber'] !== 'string' ||
+    typeof value['membershipHolderName'] !== 'string' ||
+    typeof value['membershipType'] !== 'string' ||
+    typeof value['email'] !== 'string' ||
+    typeof value['memberAge'] !== 'number' ||
+    typeof value['spouseName'] !== 'string' ||
+    (value['spouseAge'] !== null && typeof value['spouseAge'] !== 'number') ||
+    !Array.isArray(value['children']) ||
+    value['children'].length !== 4 ||
+    !value['children'].every(
+      (child) =>
+        isRecord(child) &&
+        typeof child['name'] === 'string' &&
+        (child['age'] === null || typeof child['age'] === 'number'),
+    ) ||
+    typeof value['otherFamilyMembers'] !== 'string' ||
+    typeof value['address'] !== 'string' ||
+    typeof value['postcode'] !== 'string' ||
+    typeof value['phone'] !== 'string' ||
+    typeof value['spousePhone'] !== 'string' ||
+    typeof value['additionalPhones'] !== 'string' ||
+    value['consent'] !== true
+  ) {
+    res.status(400).json({ message: 'Please complete all required renewal fields.' });
+    return;
+  }
+
+  const membershipNumber = value['membershipNumber'].trim().replace(/^0+(?=\d)/, '');
+  const membershipHolderName = value['membershipHolderName'].trim();
+  const email = value['email'].trim();
+  const postcode = value['postcode'].trim();
+  const phone = value['phone'].trim();
+  const isValidAge = (age: unknown): age is number =>
+    typeof age === 'number' && Number.isInteger(age) && age >= 0 && age <= 120;
+  if (
+    !Object.hasOwn(membershipDirectory, membershipNumber) ||
+    !membershipHolderName ||
+    membershipHolderName.length > 120 ||
+    !isValidAge(value['memberAge']) ||
+    (value['membershipType'] !== 'individual' &&
+      value['membershipType'] !== 'family') ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+    email.length > 254 ||
+    (value['spouseAge'] !== null && !isValidAge(value['spouseAge'])) ||
+    !value['children'].every(
+      (child) =>
+        child['name'].trim().length <= 120 &&
+        (child['age'] === null || isValidAge(child['age'])),
+    ) ||
+    value['otherFamilyMembers'].length > 1000 ||
+    value['address'].length > 500 ||
+    postcode.length < 3 ||
+    postcode.length > 12 ||
+    phone.length < 7 ||
+    phone.length > 30 ||
+    value['spousePhone'].length > 30 ||
+    value['additionalPhones'].length > 500
+  ) {
+    res.status(400).json({
+      message: 'Please check the membership number and required field formats.',
+    });
+    return;
+  }
+
+  const encryptionKey = getEncryptionKey();
+  if (!encryptionKey || !hasPersistentStorageConfigured()) {
+    res.status(503).json({ message: 'Secure renewal storage is not configured.' });
+    return;
+  }
+
+  try {
+    const renewal: MembershipRenewal = {
+      id: randomUUID(),
+      createdAt: new Date().toISOString(),
+      email,
+      membershipType: value['membershipType'],
+      membershipNumber,
+      membershipHolderName,
+      memberAge: value['memberAge'],
+      spouseName: value['spouseName'].trim(),
+      spouseAge: value['spouseAge'],
+      children: value['children'].map((child) => ({
+        name: child['name'].trim(),
+        age: child['age'],
+      })),
+      otherFamilyMembers: value['otherFamilyMembers'].trim(),
+      address: value['address'].trim(),
+      postcode,
+      phone,
+      spousePhone: value['spousePhone'].trim(),
+      additionalPhones: value['additionalPhones'].trim(),
+      consent: true,
+    };
+    await saveMembershipRenewal(renewal, encryptionKey);
+    res.status(201).json({
+      message: 'Thank you. Your membership renewal details have been submitted.',
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get('/api/admin/registrations', adminAuthentication, async (_req, res, next) => {
@@ -900,6 +1631,122 @@ app.get('/api/admin/registrations', adminAuthentication, async (_req, res, next)
     next(error);
   }
 });
+
+app.get(
+  '/api/admin/membership-renewals',
+  adminAuthentication,
+  async (_req, res, next) => {
+    try {
+      const encryptionKey = getEncryptionKey();
+      if (!encryptionKey || !hasPersistentStorageConfigured()) {
+        res.status(503).json({ message: 'The secure storage service is not configured.' });
+        return;
+      }
+      const renewals = await getMembershipRenewals(encryptionKey);
+      res.setHeader('Cache-Control', 'no-store');
+      res.json(renewals);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.get(
+  '/api/admin/membership-renewals/clear-schedule',
+  adminAuthentication,
+  async (_req, res, next) => {
+    try {
+      if (!hasPersistentStorageConfigured()) {
+        res.status(503).json({ message: 'The secure storage service is not configured.' });
+        return;
+      }
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ schedule: await getMembershipRenewalClearSchedule() });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.post(
+  '/api/admin/membership-renewals/clear-schedule',
+  adminAuthentication,
+  async (_req, res, next) => {
+    try {
+      if (!hasPersistentStorageConfigured()) {
+        res.status(503).json({ message: 'The secure storage service is not configured.' });
+        return;
+      }
+      if (process.env['VERCEL'] && !process.env['CRON_SECRET']) {
+        res.status(503).json({
+          message: 'Scheduled clear is not configured. Set CRON_SECRET in Vercel.',
+        });
+        return;
+      }
+      const schedule = await scheduleMembershipRenewalClear();
+      if (!schedule) {
+        res.status(409).json({
+          message: 'A renewal clear is already scheduled.',
+          schedule: await getMembershipRenewalClearSchedule(),
+        });
+        return;
+      }
+      res.status(201).json({
+        message: 'All membership renewals present now are scheduled to be cleared in 10 days.',
+        schedule,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.delete(
+  '/api/admin/membership-renewals/clear-schedule',
+  adminAuthentication,
+  async (_req, res, next) => {
+    try {
+      if (!hasPersistentStorageConfigured()) {
+        res.status(503).json({ message: 'The secure storage service is not configured.' });
+        return;
+      }
+      if (!(await cancelMembershipRenewalClear())) {
+        res.status(404).json({ message: 'There is no renewal clear scheduled to cancel.' });
+        return;
+      }
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ message: 'Scheduled renewal clear cancelled.' });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.delete(
+  '/api/admin/membership-renewals/:id',
+  adminAuthentication,
+  async (req, res, next) => {
+    const renewalId = req.params['id'];
+    if (
+      typeof renewalId !== 'string' ||
+      !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(renewalId)
+    ) {
+      res.status(400).json({ message: 'Membership renewal ID is invalid.' });
+      return;
+    }
+
+    try {
+      if (!(await removeMembershipRenewal(renewalId))) {
+        res.status(404).json({ message: 'Membership renewal not found.' });
+        return;
+      }
+      res.setHeader('Cache-Control', 'no-store');
+      res.status(204).end();
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 app.get(
   '/api/admin/registrations/clear-schedule',
@@ -980,8 +1827,18 @@ app.get(
         return;
       }
       const deletedCount = await clearRegistrationsIfDue();
+      const deletedRenewalCount = await clearMembershipRenewalsIfDue();
+      const deletedContactDetailsCount = await clearContactDetailsIfDue();
       res.setHeader('Cache-Control', 'no-store');
-      res.json({ cleared: deletedCount > 0, deletedCount });
+      res.json({
+        cleared:
+          deletedCount > 0 ||
+          deletedRenewalCount > 0 ||
+          deletedContactDetailsCount > 0,
+        deletedCount,
+        deletedRenewalCount,
+        deletedContactDetailsCount,
+      });
     } catch (error) {
       next(error);
     }
@@ -1004,6 +1861,120 @@ app.delete(
     try {
       if (!(await removeRegistration(registrationId))) {
         res.status(404).json({ message: 'Registration not found.' });
+        return;
+      }
+      res.setHeader('Cache-Control', 'no-store');
+      res.status(204).end();
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.get(
+  '/api/admin/contact-details-updates',
+  adminAuthentication,
+  async (_req, res, next) => {
+    try {
+      const encryptionKey = getEncryptionKey();
+      if (!encryptionKey || !hasPersistentStorageConfigured()) {
+        res.status(503).json({ message: 'The secure storage service is not configured.' });
+        return;
+      }
+      res.setHeader('Cache-Control', 'no-store');
+      res.json(await getContactDetailsUpdates(encryptionKey));
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.get(
+  '/api/admin/contact-details-updates/clear-schedule',
+  adminAuthentication,
+  async (_req, res, next) => {
+    try {
+      if (!hasPersistentStorageConfigured()) {
+        res.status(503).json({ message: 'The secure storage service is not configured.' });
+        return;
+      }
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ schedule: await getContactDetailsClearSchedule() });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.post(
+  '/api/admin/contact-details-updates/clear-schedule',
+  adminAuthentication,
+  async (_req, res, next) => {
+    try {
+      if (!hasPersistentStorageConfigured()) {
+        res.status(503).json({ message: 'The secure storage service is not configured.' });
+        return;
+      }
+      if (process.env['VERCEL'] && !process.env['CRON_SECRET']) {
+        res.status(503).json({
+          message: 'Scheduled clear is not configured. Set CRON_SECRET in Vercel.',
+        });
+        return;
+      }
+      const schedule = await scheduleContactDetailsClear();
+      if (!schedule) {
+        res.status(409).json({
+          message: 'A contact-details clear is already scheduled.',
+          schedule: await getContactDetailsClearSchedule(),
+        });
+        return;
+      }
+      res.status(201).json({
+        message: 'Contact-detail submissions present now are scheduled to be cleared in 10 days.',
+        schedule,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.delete(
+  '/api/admin/contact-details-updates/clear-schedule',
+  adminAuthentication,
+  async (_req, res, next) => {
+    try {
+      if (!hasPersistentStorageConfigured()) {
+        res.status(503).json({ message: 'The secure storage service is not configured.' });
+        return;
+      }
+      if (!(await cancelContactDetailsClear())) {
+        res.status(404).json({ message: 'There is no contact-details clear scheduled to cancel.' });
+        return;
+      }
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ message: 'Scheduled contact-details clear cancelled.' });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.delete(
+  '/api/admin/contact-details-updates/:id',
+  adminAuthentication,
+  async (req, res, next) => {
+    const updateId = req.params['id'];
+    if (
+      typeof updateId !== 'string' ||
+      !/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i.test(updateId)
+    ) {
+      res.status(400).json({ message: 'Contact-details update ID is invalid.' });
+      return;
+    }
+    try {
+      if (!(await removeContactDetailsUpdate(updateId))) {
+        res.status(404).json({ message: 'Contact-details update not found.' });
         return;
       }
       res.setHeader('Cache-Control', 'no-store');

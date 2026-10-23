@@ -1,5 +1,7 @@
-import { ChangeDetectorRef, Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { AdminSession } from './admin-session';
 
 type RegistrationRecord = {
   id: string;
@@ -29,12 +31,13 @@ type ConfirmationDialog = {
 
 @Component({
   selector: 'app-admin-dashboard',
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   templateUrl: './admin-dashboard.html',
   styleUrl: './admin-dashboard.scss',
 })
-export class AdminDashboard {
+export class AdminDashboard implements OnInit {
   private readonly changeDetector = inject(ChangeDetectorRef);
+  private readonly adminSession = inject(AdminSession);
   protected username = '';
   protected password = '';
   protected records: RegistrationRecord[] = [];
@@ -45,14 +48,26 @@ export class AdminDashboard {
   protected pageSize: PageSize = 10;
   protected currentPage = 1;
   protected loading = false;
-  protected loggedIn = false;
+  protected loggedIn = this.adminSession.isAuthenticated;
   protected errorMessage = '';
   protected pendingDeleteId: string | null = null;
   protected deletingId: string | null = null;
   protected clearSchedule: ClearSchedule | null = null;
   protected confirmationDialog: ConfirmationDialog | null = null;
   protected clearActionLoading = false;
-  private authorization = '';
+  private get authorization(): string {
+    return this.adminSession.authorization;
+  }
+
+  private set authorization(value: string) {
+    this.adminSession.authorization = value;
+  }
+
+  ngOnInit(): void {
+    if (this.loggedIn) {
+      void this.refresh();
+    }
+  }
 
   protected get filteredRecords(): RegistrationRecord[] {
     const query = this.searchTerm.trim().toLocaleLowerCase();
@@ -381,7 +396,7 @@ export class AdminDashboard {
   }
 
   protected signOut(): void {
-    this.authorization = '';
+    this.adminSession.signOut();
     this.username = '';
     this.password = '';
     this.records = [];
