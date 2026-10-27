@@ -117,7 +117,7 @@
               </p>
             </div>
             <button
-              type="button"
+              type="button btn btn-warning"
               class="cancel-scheduled-clear"
               [disabled]="clearActionLoading"
               (click)="cancelScheduledClear()"
@@ -273,7 +273,7 @@
                     <td>
                       <button
                         type="button"
-                        class="delete-button"
+                        class="delete-button btn btn-danger"
                         [disabled]="deletingId !== null"
                         (click)="requestDelete(record)"
                         [attr.aria-label]="'Delete registration for ' + record.name"
@@ -305,7 +305,7 @@
               <span class="page-count">Page {{ currentPage }} of {{ totalPages }}</span>
               <button
                 type="button"
-                class="page-button"
+                class="page-button btn btn-secondary"
                 [disabled]="currentPage === 1"
                 (click)="goToPage(currentPage - 1)"
                 aria-label="Previous page"
@@ -314,7 +314,7 @@
               </button>
               <button
                 type="button"
-                class="page-button"
+                class="page-button btn btn-warning text-black"
                 [disabled]="currentPage === totalPages"
                 (click)="goToPage(currentPage + 1)"
                 aria-label="Next page"

@@ -22,6 +22,7 @@ export class Registration {
   protected membershipNumberValid = false;
   protected membershipLookupLoading = false;
   protected membershipLookupMessage = '';
+  protected membershipStatus: 'renewal' | 'register' | null = null;
   protected phoneLookupMatches: MembershipPhoneMatch[] = [];
   protected phoneLookupLoading = false;
   protected phoneLookupMessage = '';
@@ -75,6 +76,7 @@ export class Registration {
     this.membershipNames = [];
     this.customNameSelected = false;
     this.membershipLookupMessage = '';
+    this.membershipStatus = null;
     this.membershipLookupLoading = false;
     this.membershipLookupRequest += 1;
     if (this.lastAutofilledName && this.name === this.lastAutofilledName) {
@@ -199,7 +201,12 @@ export class Registration {
     this.phoneLookupMatches = [];
     this.onMembershipNumberChange();
     await this.lookupMembershipNumber();
-    this.phoneLookupMessage = 'Member number and name found from mobile number.';
+    this.phoneLookupMessage =
+      this.membershipStatus === 'renewal'
+        ? 'Your membership needs renewal before board-game registration.'
+        : this.membershipStatus === 'register'
+          ? 'Please register your MAS membership before board-game registration.'
+          : 'Member number and name found from mobile number.';
   }
 
   private normalizePhoneNumber(value: string): string {
@@ -224,6 +231,7 @@ export class Registration {
     const requestId = ++this.membershipLookupRequest;
     this.membershipLookupLoading = true;
     this.membershipLookupMessage = '';
+    this.membershipStatus = null;
     try {
       const response = await fetch('/api/membership-lookup', {
         method: 'POST',
@@ -238,26 +246,55 @@ export class Registration {
       }
 
       if (response.status === 404) {
+        const result: { renewed?: unknown } = await response.json();
+        if (typeof result.renewed !== 'boolean') {
+          throw new Error('The membership lookup returned an invalid response.');
+        }
         if (this.lastAutofilledName && this.name === this.lastAutofilledName) {
           this.name = '';
         }
         this.lastAutofilledName = '';
         this.lastLookedUpMembershipNumber = membershipNumber;
+        this.membershipNumberValid = false;
+        if (result.renewed) {
+          this.membershipNumberValid = true;
+          this.membershipNames = [];
+          this.customNameSelected = false;
+          this.membershipLookupMessage =
+            'Renewed member found. Enter the participant name.';
+          return;
+        }
+        this.membershipStatus = 'register';
         this.membershipLookupMessage =
-          'Enter valid membership number';
+          'Please register your MAS membership before registering for board games.';
         return;
       }
       if (!response.ok) {
         throw new Error(`Membership lookup failed (HTTP ${response.status}).`);
       }
 
-      const result: { names?: unknown } = await response.json();
+      const result: { names?: unknown; renewed?: unknown } = await response.json();
       if (
+        typeof result.renewed !== 'boolean' ||
         !Array.isArray(result.names) ||
         result.names.length === 0 ||
         !result.names.every((name) => typeof name === 'string' && name.length > 0)
       ) {
         throw new Error('The membership lookup returned an invalid response.');
+      }
+      if (!result.renewed) {
+        this.membershipNumberValid = false;
+        this.membershipNames = [];
+        if (this.lastAutofilledName && this.name === this.lastAutofilledName) {
+          this.name = '';
+        }
+        this.lastAutofilledName = '';
+        this.customNameSelected = false;
+        this.lastLookedUpMembershipNumber = membershipNumber;
+        this.membershipStatus = 'renewal';
+        this.membershipLookupMessage =
+          'Your MAS membership must be renewed before registering for board games.';
+        return;
       }
       this.membershipNames = result.names;
       this.membershipNumberValid = true;
@@ -308,6 +345,10 @@ export class Registration {
     if (this.name) {
       this.membershipLookupMessage = 'Member name selected.';
     }
+  }
+
+  protected dismissMembershipStatus(): void {
+    this.membershipStatus = null;
   }
 
   protected toggleGame(game: Game, event: Event): void {
@@ -411,6 +452,7 @@ export class Registration {
     this.membershipNumberValid = false;
     this.membershipLookupLoading = false;
     this.membershipLookupMessage = '';
+    this.membershipStatus = null;
     this.phoneLookupMatches = [];
     this.phoneLookupLoading = false;
     this.phoneLookupMessage = '';

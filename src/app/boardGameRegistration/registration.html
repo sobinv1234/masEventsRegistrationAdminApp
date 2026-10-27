@@ -261,4 +261,27 @@
       }
     </form>
   </section>
+  @if (membershipStatus) {
+    <div class="membership-status-backdrop">
+      <section
+        class="membership-status-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="membership-status-title"
+      >
+        <h2 id="membership-status-title">
+          {{ membershipStatus === 'renewal' ? 'Renew your membership' : 'Register your membership' }}
+        </h2>
+        @if (membershipStatus === 'renewal') {
+          <p>Your membership number is on the member list, but it is not on the 2026–27 renewal list. Please renew before registering for board games.</p>
+          <a class="btn btn-success w-100" routerLink="/membership-renewal">Go to membership renewal</a>
+        } @else {
+          <p>We could not find this membership number on the member list. Please register your MAS membership before registering for board games.</p>
+        }
+        <button class="btn btn-outline-secondary w-100 mt-2" type="button" (click)="dismissMembershipStatus()">
+          Close
+        </button>
+      </section>
+    </div>
+  }
 </main>

@@ -103,7 +103,10 @@ describe('Registration', () => {
     const fetchSpy = spyOn(globalThis, 'fetch').and.callFake(
       async (input: RequestInfo | URL) => {
         if (String(input) === '/api/membership-lookup') {
-          return new Response(JSON.stringify({ names: ['Abhilash Padayattil'] }), {
+          return new Response(JSON.stringify({
+            names: ['Abhilash Padayattil'],
+            renewed: true,
+          }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
           });
@@ -134,7 +137,10 @@ describe('Registration', () => {
     fixture.detectChanges();
     registration['membershipNumber'] = '245';
     spyOn(globalThis, 'fetch').and.resolveTo(
-      new Response(JSON.stringify({ names: ['Abhilash Padayattil'] }), {
+      new Response(JSON.stringify({
+        names: ['Abhilash Padayattil'],
+        renewed: true,
+      }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }),
@@ -146,14 +152,73 @@ describe('Registration', () => {
     expect(registration['membershipNames']).toEqual(['Abhilash Padayattil']);
   });
 
+  it('allows a renewed membership that is not in the older member directory', async () => {
+    const fixture = TestBed.createComponent(Registration);
+    const registration = fixture.componentInstance;
+    registration['membershipNumber'] = '00500';
+    spyOn(globalThis, 'fetch').and.resolveTo(
+      new Response(JSON.stringify({
+        message: 'No member found for that number.',
+        renewed: true,
+      }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await registration['lookupMembershipNumber']();
+
+    expect(registration['membershipNumberValid']).toBeTrue();
+    expect(registration['membershipStatus']).toBeNull();
+    expect(registration['membershipLookupMessage']).toContain('Enter the participant name');
+  });
+
+  it('asks members on the directory but not on the renewal list to renew', async () => {
+    const fixture = TestBed.createComponent(Registration);
+    const registration = fixture.componentInstance;
+    registration['membershipNumber'] = '27';
+    spyOn(globalThis, 'fetch').and.resolveTo(
+      new Response(JSON.stringify({ names: ['Directory Member'], renewed: false }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await registration['lookupMembershipNumber']();
+    fixture.detectChanges();
+
+    expect(registration['membershipNumberValid']).toBeFalse();
+    expect(registration['membershipStatus']).toBe('renewal');
+    expect(fixture.nativeElement.textContent).toContain('Go to membership renewal');
+  });
+
+  it('accepts a renewal reported by the server even when the static renewal list is outdated', async () => {
+    const fixture = TestBed.createComponent(Registration);
+    const registration = fixture.componentInstance;
+    registration['membershipNumber'] = '27';
+    spyOn(globalThis, 'fetch').and.resolveTo(
+      new Response(JSON.stringify({ names: ['Directory Member'], renewed: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    await registration['lookupMembershipNumber']();
+
+    expect(registration['membershipNumberValid']).toBeTrue();
+    expect(registration['membershipStatus']).toBeNull();
+    expect(registration['name']).toBe('Directory Member');
+  });
+
   it('shows a dropdown for multiple matching member names and uses the selected name', async () => {
     const fixture = TestBed.createComponent(Registration);
     const registration = fixture.componentInstance;
     fixture.detectChanges();
-    registration['membershipNumber'] = 'duplicate-test';
+    registration['membershipNumber'] = '323';
     spyOn(globalThis, 'fetch').and.resolveTo(
       new Response(JSON.stringify({
         names: ['Shared Member One', 'Shared Member Two'],
+        renewed: true,
       }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -185,10 +250,11 @@ describe('Registration', () => {
     const fixture = TestBed.createComponent(Registration);
     const registration = fixture.componentInstance;
     fixture.detectChanges();
-    registration['membershipNumber'] = 'duplicate-test';
+    registration['membershipNumber'] = '323';
     spyOn(globalThis, 'fetch').and.resolveTo(
       new Response(JSON.stringify({
         names: ['Parent One', 'Parent Two'],
+        renewed: true,
       }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -229,7 +295,10 @@ describe('Registration', () => {
     fixture.detectChanges();
     registration['membershipNumber'] = '245';
     spyOn(globalThis, 'fetch').and.resolveTo(
-      new Response(JSON.stringify({ names: ['Abhilash Padayattil'] }), {
+      new Response(JSON.stringify({
+        names: ['Abhilash Padayattil'],
+        renewed: true,
+      }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }),
@@ -266,7 +335,10 @@ describe('Registration', () => {
     registration['membershipNumber'] = '999';
     registration['onMembershipNumberChange']();
     spyOn(globalThis, 'fetch').and.resolveTo(
-      new Response(JSON.stringify({ message: 'No member found for that number.' }), {
+      new Response(JSON.stringify({
+        message: 'No member found for that number.',
+        renewed: false,
+      }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' },
       }),
@@ -277,6 +349,7 @@ describe('Registration', () => {
 
     expect(submitButton.disabled).toBeTrue();
     expect(registration['membershipNumberValid']).toBeFalse();
+    expect(registration['membershipStatus']).toBe('register');
   });
 
   it('fills the member number and name when the mobile number matches', async () => {
@@ -294,7 +367,7 @@ describe('Registration', () => {
             { status: 200, headers: { 'Content-Type': 'application/json' } },
           );
         }
-        return new Response(JSON.stringify({ names: ['Biju Abraham'] }), {
+        return new Response(JSON.stringify({ names: ['Biju Abraham'], renewed: true }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         });

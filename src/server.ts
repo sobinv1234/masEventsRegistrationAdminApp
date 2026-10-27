@@ -19,6 +19,7 @@ import type { DatabaseSync as SqliteDatabase } from 'node:sqlite';
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { membershipDirectory } from './membership-directory';
+import { isMembershipRenewed } from './renewed-memberships';
 import {
   mergeMembershipProfile,
   type MembershipProfile,
@@ -110,6 +111,10 @@ function getSqliteDatabase(): SqliteDatabase {
       membership_number TEXT PRIMARY KEY,
       profile_data TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS membership_renewal_status (
+      membership_number TEXT PRIMARY KEY,
+      renewed BOOLEAN NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS membership_renewal_clear_schedule (
       schedule_key TEXT PRIMARY KEY,
       requested_at TEXT NOT NULL,
@@ -172,6 +177,12 @@ async function ensureNeonSchema(): Promise<void> {
         getNeonSql()`CREATE TABLE IF NOT EXISTS membership_directory_profiles (
           membership_number TEXT PRIMARY KEY,
           profile_data TEXT NOT NULL
+        )`,
+      )
+      .then(() =>
+        getNeonSql()`CREATE TABLE IF NOT EXISTS membership_renewal_status (
+          membership_number TEXT PRIMARY KEY,
+          renewed BOOLEAN NOT NULL
         )`,
       )
       .then(() =>
@@ -292,6 +303,7 @@ async function saveMembershipRenewal(
         (id, created_at, renewal_data)
         VALUES (${storedRenewal.id}, ${storedRenewal.createdAt}, ${renewalData})`;
     }
+    await setMembershipRenewalStatus(renewal.membershipNumber, true);
     return;
   }
 
@@ -311,6 +323,7 @@ async function saveMembershipRenewal(
        VALUES (?, ?, ?)`,
     ).run(storedRenewal.id, storedRenewal.createdAt, renewalData);
   }
+  await setMembershipRenewalStatus(renewal.membershipNumber, true);
 }
 
 async function getMembershipDirectoryProfiles(
@@ -336,6 +349,131 @@ async function getMembershipDirectoryProfiles(
       decryptMembershipRenewal(String(row['profile_data']), key),
     ]),
   );
+}
+
+async function hasRenewalProfile(membershipNumber: string): Promise<boolean> {
+  const normalizedMembershipNumber = membershipNumber.trim().replace(/^0+(?=\d)/, '');
+  if (!hasPersistentStorageConfigured()) {
+    return false;
+  }
+
+  if (process.env['DATABASE_URL']) {
+    await ensureNeonSchema();
+    const rows = await getNeonSql()`SELECT membership_number
+      FROM membership_directory_profiles
+      WHERE membership_number = ${normalizedMembershipNumber}
+      LIMIT 1`;
+    return rows.length > 0;
+  }
+
+  return Boolean(
+    getSqliteDatabase()
+      .prepare(
+        `SELECT membership_number
+         FROM membership_directory_profiles
+         WHERE membership_number = ?
+         LIMIT 1`,
+      )
+      .get(normalizedMembershipNumber),
+  );
+}
+
+async function getMembershipRenewalStatus(
+  membershipNumber: string,
+): Promise<boolean | null> {
+  const normalizedMembershipNumber = membershipNumber.trim().replace(/^0+(?=\d)/, '');
+  if (process.env['DATABASE_URL']) {
+    await ensureNeonSchema();
+    const rows = await getNeonSql()`SELECT renewed
+      FROM membership_renewal_status
+      WHERE membership_number = ${normalizedMembershipNumber}
+      LIMIT 1`;
+    const status = rows[0]?.['renewed'];
+    return status === undefined ? null : status === true;
+  }
+
+  const row = getSqliteDatabase()
+    .prepare(
+      `SELECT renewed
+       FROM membership_renewal_status
+       WHERE membership_number = ?
+       LIMIT 1`,
+    )
+    .get(normalizedMembershipNumber);
+  return row ? Number(row['renewed']) === 1 : null;
+}
+
+async function setMembershipRenewalStatus(
+  membershipNumber: string,
+  renewed: boolean,
+): Promise<void> {
+  const normalizedMembershipNumber = membershipNumber.trim().replace(/^0+(?=\d)/, '');
+  if (process.env['DATABASE_URL']) {
+    await ensureNeonSchema();
+    await getNeonSql()`INSERT INTO membership_renewal_status
+      (membership_number, renewed)
+      VALUES (${normalizedMembershipNumber}, ${renewed})
+      ON CONFLICT (membership_number)
+      DO UPDATE SET renewed = EXCLUDED.renewed`;
+    return;
+  }
+
+  getSqliteDatabase()
+    .prepare(
+      `INSERT INTO membership_renewal_status (membership_number, renewed)
+       VALUES (?, ?)
+       ON CONFLICT(membership_number)
+       DO UPDATE SET renewed = excluded.renewed`,
+    )
+    .run(normalizedMembershipNumber, renewed ? 1 : 0);
+}
+
+async function removeMembershipDirectoryProfile(
+  membershipNumber: string,
+): Promise<void> {
+  const normalizedMembershipNumber = membershipNumber.trim().replace(/^0+(?=\d)/, '');
+  if (process.env['DATABASE_URL']) {
+    await ensureNeonSchema();
+    await getNeonSql()`DELETE FROM membership_directory_profiles
+      WHERE membership_number = ${normalizedMembershipNumber}`;
+    return;
+  }
+
+  getSqliteDatabase()
+    .prepare(
+      `DELETE FROM membership_directory_profiles
+       WHERE membership_number = ?`,
+    )
+    .run(normalizedMembershipNumber);
+}
+
+async function isMembershipRenewedCurrent(membershipNumber: string): Promise<boolean> {
+  if (!hasPersistentStorageConfigured()) {
+    return isMembershipRenewed(membershipNumber);
+  }
+
+  const status = await getMembershipRenewalStatus(membershipNumber);
+  if (status !== null) {
+    return status;
+  }
+
+  const normalizedMembershipNumber = membershipNumber.trim().replace(/^0+(?=\d)/, '');
+  const key = getEncryptionKey();
+  if (
+    key &&
+    (await getMembershipRenewals(key)).some(
+      (renewal) =>
+        renewal.membershipNumber.trim().replace(/^0+(?=\d)/, '') ===
+        normalizedMembershipNumber,
+    )
+  ) {
+    return true;
+  }
+
+  if (await hasRenewalProfile(normalizedMembershipNumber)) {
+    return false;
+  }
+  return isMembershipRenewed(normalizedMembershipNumber);
 }
 
 async function saveMembershipDirectoryProfile(
@@ -397,18 +535,37 @@ async function getMembershipRenewals(key: Buffer): Promise<MembershipRenewal[]> 
 }
 
 async function removeMembershipRenewal(renewalId: string): Promise<boolean> {
+    const key = getEncryptionKey();
+    if (!key) {
+      throw new Error('Membership renewal storage encryption is not configured.');
+    }
+    const renewal = (await getMembershipRenewals(key)).find(
+      (existing) => existing.id === renewalId,
+    );
+    if (!renewal) {
+      return false;
+    }
+
     if (process.env['DATABASE_URL']) {
       await ensureNeonSchema();
       const rows = await getNeonSql()`DELETE FROM membership_renewals
         WHERE id = ${renewalId}
         RETURNING id`;
-      return rows.length > 0;
+      if (rows.length === 0) {
+        return false;
+      }
+    } else {
+      const result = getSqliteDatabase()
+        .prepare('DELETE FROM membership_renewals WHERE id = ?')
+        .run(renewalId);
+      if (result.changes === 0) {
+        return false;
+      }
     }
 
-    const result = getSqliteDatabase()
-      .prepare('DELETE FROM membership_renewals WHERE id = ?')
-      .run(renewalId);
-    return result.changes > 0;
+    await setMembershipRenewalStatus(renewal.membershipNumber, false);
+    await removeMembershipDirectoryProfile(renewal.membershipNumber);
+    return true;
 }
 
 async function getMembershipRenewalClearSchedule(): Promise<RegistrationClearSchedule | null> {
@@ -1396,6 +1553,23 @@ app.post('/api/registrations', async (req, res, next) => {
     return;
   }
 
+  try {
+    if (!(await isMembershipRenewedCurrent(validation.registration.membershipNumber))) {
+      res.status(403).json({
+        message: Object.hasOwn(
+          membershipDirectory,
+          validation.registration.membershipNumber.trim().replace(/^0+(?=\d)/, ''),
+        )
+          ? 'Your MAS membership must be renewed before registering for board games.'
+          : 'Please register your MAS membership before registering for board games.',
+      });
+      return;
+    }
+  } catch (error) {
+    next(error);
+    return;
+  }
+
   const transporter = createEmailTransporter();
   const encryptionKey = getEncryptionKey();
   if (!transporter || !encryptionKey) {
@@ -1472,7 +1646,7 @@ app.post('/api/registrations', async (req, res, next) => {
   }
 });
 
-app.post('/api/membership-lookup', (req, res) => {
+app.post('/api/membership-lookup', async (req, res, next) => {
   if (!isRecord(req.body) || typeof req.body['membershipNumber'] !== 'string') {
     res.status(400).json({ message: 'Enter a valid membership number.' });
     return;
@@ -1485,18 +1659,25 @@ app.post('/api/membership-lookup', (req, res) => {
   }
 
   const normalizedMembershipNumber = membershipNumber.replace(/^0+(?=\d)/, '');
-  if (!Object.hasOwn(membershipDirectory, normalizedMembershipNumber)) {
-    res.status(404).json({ message: 'No member found for that number.' });
-    return;
-  }
+  try {
+    const renewed = await isMembershipRenewedCurrent(normalizedMembershipNumber);
+    res.setHeader('Cache-Control', 'no-store');
+    const member = membershipDirectory[normalizedMembershipNumber];
+    if (!member) {
+      res.status(404).json({
+        message: 'No member found for that number.',
+        renewed,
+      });
+      return;
+    }
 
-  res.setHeader('Cache-Control', 'no-store');
-  res.json({
-    names: getMembershipNames(
-      normalizedMembershipNumber,
-      membershipDirectory[normalizedMembershipNumber].names,
-    ),
-  });
+    res.json({
+      names: getMembershipNames(normalizedMembershipNumber, member.names),
+      renewed,
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post('/api/membership-phone-lookup', (req, res) => {

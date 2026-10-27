@@ -254,6 +254,33 @@ button:disabled {
   text-align: center;
 }
 
+.membership-status-backdrop {
+  position: fixed;
+  z-index: 1050;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(19 36 29 / 55%);
+}
+
+.membership-status-dialog {
+  width: min(100%, 440px);
+  padding: 24px;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 16px 48px rgb(22 69 56 / 24%);
+}
+
+.membership-status-dialog h2 {
+  margin-bottom: 12px;
+}
+
+.membership-status-dialog p {
+  color: #43584e;
+  line-height: 1.5;
+}
+
 @media (max-width: 520px) {
   .registration-page {
     padding: 16px 10px;
