@@ -77,7 +77,7 @@ export const membershipDirectory: Record<string, MembershipDirectoryEntry> = {
   "148": { names: ["Siby Kurian"], phone: "07828986842" },
   "154": { names: ["Simon Jacob"], phone: "07450966913" },
   "155": { names: ["Sinoy Jose"], phone: "07533741897" },
-  "159": { names: ["Stephen Joy Idukkulla"], phone: "07985089639" },
+  "159": { names: ["Stephen Joy Idiculla"], phone: "07985089639" },
   "160": { names: ["Stoy Trissokkar"], phone: "07912982592" },
   "161": { names: ["Sunil Chacko"], phone: "07710618432" },
   "162": { names: ["Sunil George"], phone: "07734475699" },
