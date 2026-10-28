@@ -42,6 +42,7 @@
             Select your name
             <select
               name="selectedMember"
+              class="form-select dropdown-name"
               [ngModel]="selectedMember"
               (ngModelChange)="selectMember($event)"
               required
