@@ -110,20 +110,31 @@ export const membershipFamilyDirectory: Record<string, MembershipFamilyEntry> = 
 export function getMembershipNames(
   membershipNumber: string,
   memberNames: string[],
+  spouseNameOverride?: string,
+  additionalNames: string[] = [],
 ): string[] {
-  const spouseName = membershipFamilyDirectory[membershipNumber]?.spouseName;
-  return spouseName && !memberNames.includes(spouseName)
-    ? [...memberNames, spouseName]
-    : memberNames;
+  const spouseName =
+    spouseNameOverride || membershipFamilyDirectory[membershipNumber]?.spouseName;
+  return [
+    ...new Set(
+      [...memberNames, spouseName, ...additionalNames]
+        .map((name) => name?.trim())
+        .filter((name): name is string => Boolean(name)),
+    ),
+  ];
 }
 
 export function getMembershipPhoneNumbers(
   membershipNumber: string,
   memberPhone?: string,
+  spousePhoneOverride?: string,
 ): string[] {
   return [
     ...new Set(
-      [memberPhone, membershipFamilyDirectory[membershipNumber]?.spousePhone]
+      [
+        memberPhone,
+        spousePhoneOverride || membershipFamilyDirectory[membershipNumber]?.spousePhone,
+      ]
         .filter((phone): phone is string => Boolean(phone)),
     ),
   ];

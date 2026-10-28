@@ -351,6 +351,35 @@ async function getMembershipDirectoryProfiles(
   );
 }
 
+async function getMembershipDirectoryProfile(
+  key: Buffer,
+  membershipNumber: string,
+): Promise<MembershipRenewal | undefined> {
+  const normalizedMembershipNumber = membershipNumber.trim().replace(/^0+(?=\d)/, '');
+  let row: Record<string, unknown> | undefined;
+  if (process.env['DATABASE_URL']) {
+    await ensureNeonSchema();
+    const rows = await getNeonSql()`SELECT profile_data
+      FROM membership_directory_profiles
+      WHERE membership_number = ${normalizedMembershipNumber}
+      LIMIT 1`;
+    row = rows[0];
+  } else {
+    row = getSqliteDatabase()
+      .prepare(
+        `SELECT profile_data
+         FROM membership_directory_profiles
+         WHERE membership_number = ?
+         LIMIT 1`,
+      )
+      .get(normalizedMembershipNumber);
+  }
+
+  return row
+    ? decryptMembershipRenewal(String(row['profile_data']), key)
+    : undefined;
+}
+
 async function hasRenewalProfile(membershipNumber: string): Promise<boolean> {
   const normalizedMembershipNumber = membershipNumber.trim().replace(/^0+(?=\d)/, '');
   if (!hasPersistentStorageConfigured()) {
@@ -1671,8 +1700,20 @@ app.post('/api/membership-lookup', async (req, res, next) => {
       return;
     }
 
+    const encryptionKey = getEncryptionKey();
+    const profile =
+      encryptionKey && hasPersistentStorageConfigured()
+        ? await getMembershipDirectoryProfile(encryptionKey, normalizedMembershipNumber)
+        : undefined;
     res.json({
-      names: getMembershipNames(normalizedMembershipNumber, member.names),
+      names: getMembershipNames(
+        normalizedMembershipNumber,
+        member.names,
+        profile?.membershipType === 'family' ? profile.spouseName : undefined,
+        profile?.membershipType === 'family'
+          ? profile.children.map((child) => child.name)
+          : [],
+      ),
       renewed,
     });
   } catch (error) {
@@ -1680,7 +1721,7 @@ app.post('/api/membership-lookup', async (req, res, next) => {
   }
 });
 
-app.post('/api/membership-phone-lookup', (req, res) => {
+app.post('/api/membership-phone-lookup', async (req, res, next) => {
   if (!isRecord(req.body) || typeof req.body['phone'] !== 'string') {
     res.status(400).json({ message: 'Enter a valid mobile number.' });
     return;
@@ -1692,25 +1733,47 @@ app.post('/api/membership-phone-lookup', (req, res) => {
     return;
   }
 
-  const matches = Object.entries(membershipDirectory)
-    .filter(
-      ([membershipNumber, member]) =>
-        getMembershipPhoneNumbers(
+  try {
+    const encryptionKey = getEncryptionKey();
+    const profiles =
+      encryptionKey && hasPersistentStorageConfigured()
+        ? await getMembershipDirectoryProfiles(encryptionKey)
+        : new Map<string, MembershipRenewal>();
+    const matches = Object.entries(membershipDirectory)
+      .filter(([membershipNumber, member]) => {
+        const profile = profiles.get(membershipNumber);
+        const spousePhone =
+          profile?.membershipType === 'family' ? profile.spousePhone : undefined;
+        return getMembershipPhoneNumbers(
           membershipNumber,
           member.phone,
-        ).some((phone) => normalizePhoneNumber(phone) === normalizedPhone),
-    )
-    .map(([membershipNumber, member]) => ({
-      membershipNumber,
-      names: getMembershipNames(membershipNumber, member.names),
-    }));
+          spousePhone,
+        ).some((phone) => normalizePhoneNumber(phone) === normalizedPhone);
+      })
+      .map(([membershipNumber, member]) => {
+        const profile = profiles.get(membershipNumber);
+        return {
+          membershipNumber,
+          names: getMembershipNames(
+            membershipNumber,
+            member.names,
+            profile?.membershipType === 'family' ? profile.spouseName : undefined,
+            profile?.membershipType === 'family'
+              ? profile.children.map((child) => child.name)
+              : [],
+          ),
+        };
+      });
 
-  res.setHeader('Cache-Control', 'no-store');
-  if (matches.length === 0) {
-    res.status(404).json({ message: 'No member found for that mobile number.' });
-    return;
+    res.setHeader('Cache-Control', 'no-store');
+    if (matches.length === 0) {
+      res.status(404).json({ message: 'No member found for that mobile number.' });
+      return;
+    }
+    res.json({ matches });
+  } catch (error) {
+    next(error);
   }
-  res.json({ matches });
 });
 
 app.post('/api/contact-details-updates', async (req, res, next) => {

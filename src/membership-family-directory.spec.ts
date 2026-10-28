@@ -26,4 +26,20 @@ describe('membership family directory', () => {
       '07910062051',
     ]);
   });
+
+  it('uses renewed family names and keeps them under the same membership number', () => {
+    expect(
+      getMembershipNames('239', ['Abymon Jacob'], 'Updated Spouse', [
+        'Child One',
+        'Child Two',
+      ]),
+    ).toEqual(['Abymon Jacob', 'Updated Spouse', 'Child One', 'Child Two']);
+  });
+
+  it('uses the renewed spouse phone when it has been updated', () => {
+    expect(getMembershipPhoneNumbers('239', '07577738234', '07123456789')).toEqual([
+      '07577738234',
+      '07123456789',
+    ]);
+  });
 });
