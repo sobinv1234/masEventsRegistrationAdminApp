@@ -122,8 +122,29 @@
                 <time [attr.datetime]="record.createdAt">{{ formatDate(record.createdAt) }}</time>
               </header>
               <dl>
+                <div><dt>Membership type</dt><dd>{{ record.membershipType === 'family' ? 'Family' : 'Individual' }}</dd></div>
                 <div><dt>Email</dt><dd><a [href]="'mailto:' + record.email">{{ record.email }}</a></dd></div>
                 <div><dt>Address</dt><dd>{{ record.address }}</dd></div>
+                @if (record.membershipType === 'family') {
+                  <div>
+                    <dt>Spouse</dt>
+                    <dd>
+                      {{ record.spouseName || 'Not provided' }}
+                      @if (record.spouseAge !== null) { ({{ record.spouseAge }}) }
+                    </dd>
+                  </div>
+                  @if (record.spousePhone) {
+                    <div><dt>Spouse phone</dt><dd>{{ record.spousePhone }}</dd></div>
+                  }
+                  @for (child of record.children; track $index; let index = $index) {
+                    @if (child.name) {
+                      <div>
+                        <dt>Child {{ index + 1 }}</dt>
+                        <dd>{{ child.name }}@if (child.age !== null) { ({{ child.age }}) }</dd>
+                      </div>
+                    }
+                  }
+                }
                 <div><dt>Consent</dt><dd>{{ record.consent ? 'Agreed' : 'Not agreed' }}</dd></div>
               </dl>
               <button

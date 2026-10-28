@@ -110,6 +110,31 @@ textarea:focus-visible {
   background: #f8fbf8;
 }
 
+.family-details {
+  margin: 24px 0;
+  padding: 18px;
+  border: 1px solid #d7e5dc;
+  border-radius: 10px;
+  background: #f8fbf8;
+}
+
+.family-details h2 {
+  margin: 0 0 8px;
+  color: #164538;
+  font-size: 20px;
+}
+
+.family-details p {
+  color: #60736a;
+  line-height: 1.5;
+}
+
+.family-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
 .privacy-section {
   margin: 26px 0 18px;
   padding: 18px;
@@ -175,6 +200,11 @@ footer a {
 @media (max-width: 560px) {
   .contact-page {
     padding: 18px 10px;
+  }
+
+  .family-fields {
+    grid-template-columns: 1fr;
+    gap: 0;
   }
 
   .contact-header,

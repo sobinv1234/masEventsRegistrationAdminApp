@@ -5,7 +5,9 @@ import { RouterLink } from '@angular/router';
 type ContactMatch = {
   membershipNumber: string;
   names: string[];
+  membershipType: 'individual' | 'family';
 };
+type ContactChild = { name: string; age: number | null };
 
 @Component({
   selector: 'app-contact-details',
@@ -18,6 +20,14 @@ export class ContactDetailsForm {
   protected phone = '';
   protected membershipNumber = '';
   protected name = '';
+  protected membershipType: 'individual' | 'family' = 'individual';
+  protected spouseName = '';
+  protected spouseAge: number | null = null;
+  protected spousePhone = '';
+  protected children: ContactChild[] = Array.from({ length: 4 }, () => ({
+    name: '',
+    age: null,
+  }));
   protected email = '';
   protected address = '';
   protected consent = false;
@@ -37,6 +47,11 @@ export class ContactDetailsForm {
     this.lookingUp = false;
     this.membershipNumber = '';
     this.name = '';
+    this.membershipType = 'individual';
+    this.spouseName = '';
+    this.spouseAge = null;
+    this.spousePhone = '';
+    this.children = Array.from({ length: 4 }, () => ({ name: '', age: null }));
     this.email = '';
     this.matches = [];
     this.selectedMatch = -1;
@@ -76,10 +91,26 @@ export class ContactDetailsForm {
         throw new Error(await this.getApiError(response, 'Could not look up this phone number.'));
       }
       const result: {
-        matches: { membershipNumber: string; names: string[] }[];
+        matches?: unknown;
       } = await response.json();
       if (requestId !== this.phoneLookupRequest || phone !== this.phone.trim()) {
         return;
+      }
+      if (
+        !Array.isArray(result.matches) ||
+        !result.matches.every(
+          (match) =>
+            typeof match === 'object' &&
+            match !== null &&
+            typeof match.membershipNumber === 'string' &&
+            Array.isArray(match.names) &&
+            match.names.length > 0 &&
+            match.names.every((name: unknown) => typeof name === 'string') &&
+            (match.membershipType === 'individual' ||
+              match.membershipType === 'family'),
+        )
+      ) {
+        throw new Error('The mobile lookup returned an invalid response.');
       }
       this.matches = result.matches;
       if (this.matches.length === 1) {
@@ -116,6 +147,7 @@ export class ContactDetailsForm {
     this.selectedMatch = index;
     this.membershipNumber = match.membershipNumber;
     this.name = match.names.join(', ');
+    this.membershipType = match.membershipType;
     this.phoneMatchVerified = true;
     this.errorMessage = '';
     this.lookupMessage = 'Member details found. Please check and complete your details.';
@@ -142,6 +174,11 @@ export class ContactDetailsForm {
           phone: this.phone,
           membershipNumber: this.membershipNumber,
           name: this.name,
+          membershipType: this.membershipType,
+          spouseName: this.spouseName,
+          spouseAge: this.spouseAge,
+          spousePhone: this.spousePhone,
+          children: this.children,
           email: this.email,
           address: this.address,
           consent: this.consent,

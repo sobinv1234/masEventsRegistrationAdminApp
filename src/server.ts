@@ -19,7 +19,10 @@ import type { DatabaseSync as SqliteDatabase } from 'node:sqlite';
 import { neon, type NeonQueryFunction } from '@neondatabase/serverless';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { membershipDirectory } from './membership-directory';
-import { isMembershipRenewed } from './renewed-memberships';
+import {
+  getRenewedMembershipType,
+  isMembershipRenewed,
+} from './renewed-memberships';
 import {
   mergeMembershipProfile,
   type MembershipProfile,
@@ -60,9 +63,14 @@ type ContactDetailsUpdate = {
   createdAt: string;
   phone: string;
   membershipNumber: string;
+  membershipType: 'individual' | 'family';
   name: string;
   email: string;
   address: string;
+  spouseName: string;
+  spouseAge: number | null;
+  spousePhone: string;
+  children: { name: string; age: number | null }[];
   consent: true;
 };
 
@@ -1124,6 +1132,31 @@ function normalizePhoneNumber(value: string): string {
   return digits.startsWith('0') ? digits : `0${digits}`;
 }
 
+function getMemberPhoneNumbers(
+  membershipNumber: string,
+  memberPhone: string | undefined,
+  profile?: MembershipRenewal,
+): string[] {
+  const phones = [
+    ...getMembershipPhoneNumbers(
+      membershipNumber,
+      memberPhone,
+      profile?.membershipType === 'family' ? profile.spousePhone : undefined,
+    ),
+    profile?.phone,
+    profile?.mobileNumber,
+    ...(profile?.membershipType === 'family' ? [profile.spousePhone] : []),
+    ...(profile?.additionalPhones.split(/[;,]/) ?? []),
+  ];
+  return [
+    ...new Set(
+      phones
+        .filter((phone): phone is string => Boolean(phone?.trim()))
+        .map((phone) => phone.trim()),
+    ),
+  ];
+}
+
 function getCategory(age: number): string {
   if (age <= 13) {
     return '8–13';
@@ -1367,6 +1400,22 @@ function decryptContactDetailsUpdate(
     typeof value['name'] !== 'string' ||
     typeof value['email'] !== 'string' ||
     typeof value['address'] !== 'string' ||
+    (value['membershipType'] !== undefined &&
+      value['membershipType'] !== 'individual' &&
+      value['membershipType'] !== 'family') ||
+    (value['spouseName'] !== undefined && typeof value['spouseName'] !== 'string') ||
+    (value['spouseAge'] !== undefined &&
+      value['spouseAge'] !== null &&
+      typeof value['spouseAge'] !== 'number') ||
+    (value['spousePhone'] !== undefined && typeof value['spousePhone'] !== 'string') ||
+    (value['children'] !== undefined &&
+      (!Array.isArray(value['children']) ||
+        !value['children'].every(
+          (child) =>
+            isRecord(child) &&
+            typeof child['name'] === 'string' &&
+            (child['age'] === null || typeof child['age'] === 'number'),
+        ))) ||
     value['consent'] !== true
   ) {
     throw new Error('Stored contact details update data is invalid.');
@@ -1376,9 +1425,21 @@ function decryptContactDetailsUpdate(
     createdAt: value['createdAt'],
     phone: value['phone'],
     membershipNumber: value['membershipNumber'],
+    membershipType:
+      value['membershipType'] === 'family' ? 'family' : 'individual',
     name: value['name'],
     email: value['email'],
     address: value['address'],
+    spouseName: typeof value['spouseName'] === 'string' ? value['spouseName'] : '',
+    spouseAge:
+      typeof value['spouseAge'] === 'number' ? value['spouseAge'] : null,
+    spousePhone: typeof value['spousePhone'] === 'string' ? value['spousePhone'] : '',
+    children: Array.isArray(value['children'])
+      ? value['children'].map((child) => ({
+          name: String(child['name']),
+          age: typeof child['age'] === 'number' ? child['age'] : null,
+        }))
+      : [],
     consent: true,
   };
 }
@@ -1742,24 +1803,23 @@ app.post('/api/membership-phone-lookup', async (req, res, next) => {
     const matches = Object.entries(membershipDirectory)
       .filter(([membershipNumber, member]) => {
         const profile = profiles.get(membershipNumber);
-        const spousePhone =
-          profile?.membershipType === 'family' ? profile.spousePhone : undefined;
-        return getMembershipPhoneNumbers(
-          membershipNumber,
-          member.phone,
-          spousePhone,
-        ).some((phone) => normalizePhoneNumber(phone) === normalizedPhone);
+        return getMemberPhoneNumbers(membershipNumber, member.phone, profile).some(
+          (phone) => normalizePhoneNumber(phone) === normalizedPhone,
+        );
       })
       .map(([membershipNumber, member]) => {
         const profile = profiles.get(membershipNumber);
+        const membershipType =
+          profile?.membershipType ?? getRenewedMembershipType(membershipNumber);
         return {
           membershipNumber,
+          membershipType,
           names: getMembershipNames(
             membershipNumber,
             member.names,
-            profile?.membershipType === 'family' ? profile.spouseName : undefined,
-            profile?.membershipType === 'family'
-              ? profile.children.map((child) => child.name)
+            membershipType === 'family' ? profile?.spouseName : undefined,
+            membershipType === 'family'
+              ? (profile?.children.map((child) => child.name) ?? [])
               : [],
           ),
         };
@@ -1782,9 +1842,22 @@ app.post('/api/contact-details-updates', async (req, res, next) => {
     !isRecord(value) ||
     typeof value['phone'] !== 'string' ||
     typeof value['membershipNumber'] !== 'string' ||
+    (value['membershipType'] !== 'individual' &&
+      value['membershipType'] !== 'family') ||
     typeof value['name'] !== 'string' ||
     typeof value['email'] !== 'string' ||
     typeof value['address'] !== 'string' ||
+    typeof value['spouseName'] !== 'string' ||
+    (value['spouseAge'] !== null && typeof value['spouseAge'] !== 'number') ||
+    typeof value['spousePhone'] !== 'string' ||
+    !Array.isArray(value['children']) ||
+    value['children'].length !== 4 ||
+    !value['children'].every(
+      (child) =>
+        isRecord(child) &&
+        typeof child['name'] === 'string' &&
+        (child['age'] === null || typeof child['age'] === 'number'),
+    ) ||
     value['consent'] !== true
   ) {
     res.status(400).json({ message: 'Please complete all required contact-detail fields.' });
@@ -1799,48 +1872,97 @@ app.post('/api/contact-details-updates', async (req, res, next) => {
   const normalizedPhone = normalizePhoneNumber(phone);
   const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const directoryMember = membershipDirectory[membershipNumber];
-  const phoneMatchesMembership =
-    !!directoryMember &&
-    getMembershipPhoneNumbers(membershipNumber, directoryMember.phone).some(
-      (directoryPhone) => normalizePhoneNumber(directoryPhone) === normalizedPhone,
-    );
-  const directoryNames = directoryMember
-    ? getMembershipNames(membershipNumber, directoryMember.names).join(', ')
-    : '';
-  const nameMatchesMembership = Boolean(directoryNames) && name === directoryNames;
-  if (
-    normalizedPhone.length < 7 ||
-    normalizedPhone.length > 15 ||
-    !name ||
-    name.length > 500 ||
-    !nameMatchesMembership ||
-    !validEmail ||
-    email.length > 254 ||
-    !address ||
-    address.length > 500 ||
-    !phoneMatchesMembership
-  ) {
-    res.status(400).json({
-      message:
-        'The name, phone number, and membership number must match a member in the directory. Please find your details again.',
-    });
-    return;
-  }
-
   const encryptionKey = getEncryptionKey();
   if (!encryptionKey || !hasPersistentStorageConfigured()) {
     res.status(503).json({ message: 'Secure contact-detail storage is not configured.' });
     return;
   }
   try {
+    const profile = await getMembershipDirectoryProfile(encryptionKey, membershipNumber);
+    const membershipType =
+      profile?.membershipType ?? getRenewedMembershipType(membershipNumber);
+    const spouseName = value['spouseName'].trim();
+    const spousePhone = value['spousePhone'].trim();
+    const spouseAge = value['spouseAge'];
+    const children = value['children'].map((child) => ({
+      name: child['name'].trim(),
+      age: child['age'],
+    }));
+    const isValidAge = (age: unknown): age is number =>
+      typeof age === 'number' && Number.isInteger(age) && age >= 0 && age <= 120;
+    const familyDetailsValid =
+      spouseName.length <= 120 &&
+      (spouseAge === null || isValidAge(spouseAge)) &&
+      spousePhone.length <= 30 &&
+      (!spousePhone ||
+        (normalizePhoneNumber(spousePhone).length >= 7 &&
+          normalizePhoneNumber(spousePhone).length <= 15)) &&
+      (spouseAge === null || spouseName.length > 0) &&
+      (!spousePhone || spouseName.length > 0) &&
+      children.every(
+        (child) =>
+          child.name.length <= 120 &&
+          (child.age === null || isValidAge(child.age)) &&
+          (child.name.length > 0 || child.age === null),
+      ) &&
+      (membershipType === 'family' ||
+        (!spouseName &&
+          spouseAge === null &&
+          !spousePhone &&
+          children.every((child) => !child.name && child.age === null)));
+    const phoneMatchesMembership = getMemberPhoneNumbers(
+      membershipNumber,
+      directoryMember?.phone,
+      profile,
+    ).some(
+      (directoryPhone) =>
+        normalizePhoneNumber(directoryPhone) === normalizedPhone,
+    );
+    const directoryNames = directoryMember
+      ? getMembershipNames(
+          membershipNumber,
+          directoryMember.names,
+          profile?.membershipType === 'family' ? profile.spouseName : undefined,
+          profile?.membershipType === 'family'
+            ? profile.children.map((child) => child.name)
+            : [],
+        ).join(', ')
+      : '';
+    const nameMatchesMembership = Boolean(directoryNames) && name === directoryNames;
+    if (
+      normalizedPhone.length < 7 ||
+      normalizedPhone.length > 15 ||
+      !name ||
+      name.length > 500 ||
+      !nameMatchesMembership ||
+      !validEmail ||
+      email.length > 254 ||
+      !address ||
+      address.length > 500 ||
+      !phoneMatchesMembership ||
+      value['membershipType'] !== membershipType ||
+      !familyDetailsValid
+    ) {
+      res.status(400).json({
+        message:
+          'The name, phone number, membership number, and membership type must match a member in the directory. Please find your details again.',
+      });
+      return;
+    }
+
     const update: ContactDetailsUpdate = {
       id: randomUUID(),
       createdAt: new Date().toISOString(),
       phone,
       membershipNumber,
+      membershipType,
       name,
       email,
       address,
+      spouseName,
+      spouseAge,
+      spousePhone,
+      children,
       consent: true,
     };
     await saveContactDetailsUpdate(update, encryptionKey);

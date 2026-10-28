@@ -8,9 +8,14 @@ type ContactUpdate = {
   createdAt: string;
   phone: string;
   membershipNumber: string;
+  membershipType: 'individual' | 'family';
   name: string;
   email: string;
   address: string;
+  spouseName: string;
+  spouseAge: number | null;
+  spousePhone: string;
+  children: { name: string; age: number | null }[];
   consent: boolean;
 };
 type ClearSchedule = { requestedAt: string; scheduledFor: string };
@@ -55,6 +60,9 @@ export class ContactDetailsDashboard implements OnInit {
             record.phone,
             record.email,
             record.address,
+            record.spouseName,
+            record.spousePhone,
+            ...record.children.map((child) => child.name),
           ].some((value) => value.toLocaleLowerCase().includes(query)),
         )
       : this.records;
@@ -289,19 +297,34 @@ export class ContactDetailsDashboard implements OnInit {
     const rows: string[][] = [
       [
         'Membership number',
+        'Membership type',
         'Name',
         'Phone',
         'Email',
         'Address',
+        'Spouse name',
+        'Spouse age',
+        'Spouse phone',
+        'Children',
         'Consent',
         'Submitted at (UTC)',
       ],
       ...this.records.map((record) => [
         record.membershipNumber,
+        record.membershipType === 'family' ? 'Family' : 'Individual',
         record.name,
         record.phone,
         record.email,
         record.address,
+        record.spouseName,
+        record.spouseAge === null ? '' : String(record.spouseAge),
+        record.spousePhone,
+        record.children
+          .filter((child) => child.name)
+          .map((child) =>
+            child.age === null ? child.name : `${child.name} (${child.age})`,
+          )
+          .join('; '),
         record.consent ? 'Agreed' : 'Not agreed',
         record.createdAt,
       ]),

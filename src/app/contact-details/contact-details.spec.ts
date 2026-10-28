@@ -19,6 +19,7 @@ describe('ContactDetailsForm', () => {
             matches: [{
               membershipNumber: '239',
               names: ['Abymon Jacob', 'Jayamole Aby'],
+              membershipType: 'family',
             }],
           }),
           { status: 200 },
@@ -44,7 +45,11 @@ describe('ContactDetailsForm', () => {
       Promise.resolve(
         new Response(
           JSON.stringify({
-            matches: [{ membershipNumber: '239', names: ['Abymon Jacob'] }],
+            matches: [{
+              membershipNumber: '239',
+              names: ['Abymon Jacob', 'Jayamole Aby'],
+              membershipType: 'family',
+            }],
           }),
           { status: 200 },
         ),
@@ -67,8 +72,16 @@ describe('ContactDetailsForm', () => {
         new Response(
           JSON.stringify({
             matches: [
-              { membershipNumber: '239', names: ['Abymon Jacob', 'Jayamole Aby'] },
-              { membershipNumber: '240', names: ['Another Member', 'Family Member'] },
+              {
+                membershipNumber: '239',
+                names: ['Abymon Jacob', 'Jayamole Aby'],
+                membershipType: 'family',
+              },
+              {
+                membershipNumber: '240',
+                names: ['Another Member', 'Family Member'],
+                membershipType: 'family',
+              },
             ],
           }),
           { status: 200 },
@@ -139,7 +152,11 @@ describe('ContactDetailsForm', () => {
       Promise.resolve(
         new Response(
           JSON.stringify({
-            matches: [{ membershipNumber: '239', names: ['Abymon Jacob'] }],
+            matches: [{
+              membershipNumber: '239',
+              names: ['Abymon Jacob'],
+              membershipType: 'family',
+            }],
           }),
           { status: 200 },
         ),
@@ -154,5 +171,90 @@ describe('ContactDetailsForm', () => {
     expect(form['phoneMatchVerified']).toBeTrue();
     form['onPhoneChanged']();
     expect(form['phoneMatchVerified']).toBeFalse();
+  });
+
+  it('shows spouse and child fields only for family membership', async () => {
+    const fixture = TestBed.createComponent(ContactDetailsForm);
+    const form = fixture.componentInstance;
+    form['phone'] = '07450903172';
+    const fetchSpy = spyOn(window, 'fetch').and.resolveTo(
+      new Response(
+        JSON.stringify({
+          matches: [{
+            membershipNumber: '239',
+            names: ['Abymon Jacob'],
+            membershipType: 'family',
+          }],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    await form['lookupPhone']();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.family-details')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('input[name="spouseName"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('input[name="childName0"]')).not.toBeNull();
+
+    form['onPhoneChanged']();
+    form['phone'] = '07123456789';
+    fetchSpy.and.resolveTo(
+      new Response(
+        JSON.stringify({
+          matches: [{
+            membershipNumber: '509',
+            names: ['Latha Kadalayil'],
+            membershipType: 'individual',
+          }],
+        }),
+        { status: 200 },
+      ),
+    );
+    await form['lookupPhone']();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.family-details')).toBeNull();
+  });
+
+  it('submits spouse and child details with the selected family membership', async () => {
+    const fixture = TestBed.createComponent(ContactDetailsForm);
+    const form = fixture.componentInstance;
+    form['phone'] = '07450903172';
+    form['spouseName'] = 'Updated spouse';
+    form['spouseAge'] = 35;
+    form['spousePhone'] = '07123456789';
+    form['children'][0] = { name: 'Child One', age: 8 };
+    const fetchSpy = spyOn(window, 'fetch').and.callFake(
+      async (input: RequestInfo | URL) =>
+        String(input) === '/api/membership-phone-lookup'
+          ? new Response(
+              JSON.stringify({
+                matches: [{
+                  membershipNumber: '239',
+                  names: ['Abymon Jacob'],
+                  membershipType: 'family',
+                }],
+              }),
+              { status: 200 },
+            )
+          : new Response(JSON.stringify({ message: 'Submitted.' }), { status: 201 }),
+    );
+
+    await form['lookupPhone']();
+    await form['submit'](new Event('submit') as SubmitEvent);
+
+    const submission = fetchSpy.calls.all().find(
+      (call) => String(call.args[0]) === '/api/contact-details-updates',
+    );
+    expect(JSON.parse(submission?.args[1]?.body as string)).toEqual(
+      jasmine.objectContaining({
+        membershipType: 'family',
+        spouseName: 'Updated spouse',
+        spouseAge: 35,
+        spousePhone: '07123456789',
+        children: jasmine.arrayContaining([
+          { name: 'Child One', age: 8 },
+        ]),
+      }),
+    );
   });
 });

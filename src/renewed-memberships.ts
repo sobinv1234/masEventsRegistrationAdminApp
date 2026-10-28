@@ -18,8 +18,35 @@ export const renewedMembershipNumbers: ReadonlySet<string> = new Set([
   '53', '242', '66', '244', '263', '9', '146', '92', '171', '159',
   '91', '257', '141', '235', '380', '318', '38', '279', '12', '133',
   '265', '328', '345', '134', '433', '268', '122', '5', '282', '430',
-  '299', '453', '49', '500',
+  '299', '453', '49', '500', '508', '509', '510', '511',
 ]);
+
+export type RenewalMembershipType = 'individual' | 'family';
+
+export const renewedMembershipTypes: Readonly<Record<string, RenewalMembershipType>> = {
+  '439': 'family',
+  '440': 'family',
+  '441': 'family',
+  '442': 'family',
+  '444': 'family',
+  '445': 'family',
+  '446': 'family',
+  '447': 'family',
+  '451': 'family',
+  '452': 'family',
+  '453': 'family',
+  '508': 'family',
+  '509': 'individual',
+  '510': 'family',
+  '511': 'family',
+};
+
+export function getRenewedMembershipType(
+  membershipNumber: string,
+): RenewalMembershipType {
+  const normalizedMembershipNumber = membershipNumber.trim().replace(/^0+(?=\d)/, '');
+  return renewedMembershipTypes[normalizedMembershipNumber] ?? 'individual';
+}
 
 export function isMembershipRenewed(membershipNumber: string): boolean {
   const normalizedMembershipNumber = membershipNumber.trim().replace(/^0+(?=\d)/, '');

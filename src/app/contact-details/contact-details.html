@@ -78,6 +78,66 @@
             disabled
           />
         </label>
+        @if (membershipType === 'family') {
+          <section class="family-details">
+            <h2>Family membership details</h2>
+            <p>Please add or correct the spouse and children's details covered by this membership.</p>
+            <label class="field">
+              Spouse name
+              <input
+                name="spouseName"
+                [(ngModel)]="spouseName"
+                maxlength="120"
+                autocomplete="off"
+              />
+            </label>
+            <div class="family-fields">
+              <label class="field">
+                Spouse age
+                <input
+                  name="spouseAge"
+                  type="number"
+                  [(ngModel)]="spouseAge"
+                  min="0"
+                  max="120"
+                />
+              </label>
+              <label class="field">
+                Spouse phone number
+                <input
+                  name="spousePhone"
+                  type="tel"
+                  [(ngModel)]="spousePhone"
+                  maxlength="30"
+                  autocomplete="off"
+                />
+              </label>
+            </div>
+            @for (child of children; track $index; let index = $index) {
+              <div class="family-fields">
+                <label class="field">
+                  Child {{ index + 1 }} name
+                  <input
+                    [name]="'childName' + index"
+                    [(ngModel)]="child.name"
+                    maxlength="120"
+                    autocomplete="off"
+                  />
+                </label>
+                <label class="field">
+                  Child {{ index + 1 }} age
+                  <input
+                    [name]="'childAge' + index"
+                    type="number"
+                    [(ngModel)]="child.age"
+                    min="0"
+                    max="120"
+                  />
+                </label>
+              </div>
+            }
+          </section>
+        }
         <label class="field">
           Email Address <span aria-hidden="true">*</span>
           <input
@@ -105,8 +165,9 @@
           <h2>Privacy and consent</h2>
           <p>
             MAS will use these details to maintain its membership records and
-            contact members about community activities. Your information will be
-            stored securely and handled confidentially.
+            contact members about community activities. Family membership
+            updates may include spouse and children's details. Your information
+            will be stored securely and handled confidentially.
           </p>
           <label class="consent">
             <input name="consent" type="checkbox" [(ngModel)]="consent" required />

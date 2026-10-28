@@ -20,16 +20,24 @@ describe('ContactDetailsDashboard', () => {
       createdAt: '2026-10-23T10:00:00.000Z',
       phone: '07123456789',
       membershipNumber: '203',
+      membershipType: 'family',
       name: '=Formula',
       email: 'member@example.com',
       address: '1 Test Street',
+      spouseName: 'Spouse Name',
+      spouseAge: 35,
+      spousePhone: '07111111111',
+      children: [{ name: 'Child Name', age: 8 }],
       consent: true,
     }];
 
     const csv = dashboard['buildCsv']();
 
-    expect(csv).toContain('"Membership number","Name","Phone","Email","Address"');
-    expect(csv).toContain('"203","\'=Formula","07123456789"');
+    expect(csv).toContain(
+      '"Membership number","Membership type","Name","Phone","Email","Address"',
+    );
+    expect(csv).toContain('"203","Family","\'=Formula","07123456789"');
+    expect(csv).toContain('"Spouse Name","35","07111111111","Child Name (8)"');
     expect(csv).toContain('"Agreed"');
   });
 
@@ -40,9 +48,14 @@ describe('ContactDetailsDashboard', () => {
       createdAt: '2026-10-23T10:00:00.000Z',
       phone: '07123456789',
       membershipNumber: '',
+      membershipType: 'individual' as const,
       name: 'Test Member',
       email: 'member@example.com',
       address: '1 Test Street',
+      spouseName: '',
+      spouseAge: null,
+      spousePhone: '',
+      children: [],
       consent: true,
     };
     dashboard['records'] = [record];
