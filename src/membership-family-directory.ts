@@ -104,6 +104,7 @@ export const membershipFamilyDirectory: Record<string, MembershipFamilyEntry> = 
   '442': { spouseName: 'Amrutha K Kattanattu' },
   '445': { spouseName: 'Amala Jose' },
   '447': { spouseName: 'Midhun Babu' },
+  '453': { spouseName: 'Joshua Varghese' },
   '500': { spouseName: 'Jisna Poulose' },
   '503': { spouseName: 'Nasreen Riyaz', spousePhone: '07587881075' },
 };
