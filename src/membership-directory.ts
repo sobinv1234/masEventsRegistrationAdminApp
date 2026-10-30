@@ -228,6 +228,7 @@ export const membershipDirectory: Record<string, MembershipDirectoryEntry> = {
   "451": { names: ["LALU THOMAS THOMAS"], phone: "07775470817", email: "laluthomas84@gmail.com" },
   "500": { names: ["Sobin Varghese"], phone: "07721087835", email: "sobinv71@gmail.com" },
   "501": { names: ["Rajiv Varghese"], phone: "", email: "" },
+  "503": { names: ["Riyaz Ashraf Ali Kuruvettinhayalil"], phone: "07570644329", email: "riyazashrafali@gmail.com" },
   "504": { names: ["Soni Tony"], phone: "07587718271", email: "soniyathomasakd@gmail.com" },
   "505": { names: ["Bince Sam"], phone: "", email: "" },
   "506": { names: ["Emil Aliyas"], phone: "", email: "" },
