@@ -22,6 +22,7 @@ export type MembershipProfile = {
 export type MembershipLookupDetails = {
   email: string;
   address: string;
+  keralaHomeAddress: string;
   postcode: string;
   membershipHolderName: string;
   memberAge: number | null;

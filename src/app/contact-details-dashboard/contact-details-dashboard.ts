@@ -12,6 +12,7 @@ type ContactUpdate = {
   name: string;
   email: string;
   address: string;
+  keralaHomeAddress?: string;
   spouseName: string;
   spouseAge: number | null;
   spousePhone: string;
@@ -60,6 +61,7 @@ export class ContactDetailsDashboard implements OnInit {
             record.phone,
             record.email,
             record.address,
+            record.keralaHomeAddress ?? '',
             record.spouseName,
             record.spousePhone,
             ...record.children.map((child) => child.name),
@@ -302,6 +304,7 @@ export class ContactDetailsDashboard implements OnInit {
         'Phone',
         'Email',
         'Address',
+        'Kerala Home Address',
         'Spouse name',
         'Spouse age',
         'Spouse phone',
@@ -316,6 +319,7 @@ export class ContactDetailsDashboard implements OnInit {
         record.phone,
         record.email,
         record.address,
+        record.keralaHomeAddress ?? '',
         record.spouseName,
         record.spouseAge === null ? '' : String(record.spouseAge),
         record.spousePhone,

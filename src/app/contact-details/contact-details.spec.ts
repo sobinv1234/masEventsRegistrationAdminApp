@@ -22,6 +22,7 @@ describe('ContactDetailsForm', () => {
               membershipType: 'family',
               email: 'member@example.com',
               address: '1 Example Road',
+              keralaHomeAddress: 'Kerala Home',
               spouseName: 'Jayamole Aby',
               spouseAge: 34,
               spousePhone: '07123456789',
@@ -42,6 +43,7 @@ describe('ContactDetailsForm', () => {
     expect(form['name']).toBe('Abymon Jacob, Jayamole Aby');
     expect(form['email']).toBe('member@example.com');
     expect(form['address']).toBe('1 Example Road');
+    expect(form['keralaHomeAddress']).toBe('Kerala Home');
     expect(form['spouseName']).toBe('Jayamole Aby');
     expect(form['spouseAge']).toBe(34);
     expect(form['spousePhone']).toBe('07123456789');
@@ -233,6 +235,7 @@ describe('ContactDetailsForm', () => {
     form['spouseName'] = 'Updated spouse';
     form['spouseAge'] = 35;
     form['spousePhone'] = '07123456789';
+    form['keralaHomeAddress'] = 'Kerala Home';
     form['children'][0] = { name: 'Child One', age: 8 };
     const fetchSpy = spyOn(window, 'fetch').and.callFake(
       async (input: RequestInfo | URL) =>
@@ -262,10 +265,22 @@ describe('ContactDetailsForm', () => {
         spouseName: 'Updated spouse',
         spouseAge: 35,
         spousePhone: '07123456789',
+        keralaHomeAddress: 'Kerala Home',
         children: jasmine.arrayContaining([
           { name: 'Child One', age: 8 },
         ]),
       }),
     );
+  });
+
+  it('requires Kerala Home Address on the contact-details form', () => {
+    const fixture = TestBed.createComponent(ContactDetailsForm);
+    fixture.detectChanges();
+
+    const field = fixture.nativeElement.querySelector(
+      'textarea[name="keralaHomeAddress"]',
+    ) as HTMLTextAreaElement;
+    expect(field).not.toBeNull();
+    expect(field.required).toBeTrue();
   });
 });

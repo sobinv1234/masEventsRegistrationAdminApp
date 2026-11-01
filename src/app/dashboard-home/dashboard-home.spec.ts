@@ -130,6 +130,7 @@ describe('DashboardHome', () => {
             membershipType: 'family',
             email: 'contact@example.com',
             address: 'Updated address',
+            keralaHomeAddress: 'Kerala family home',
             spouseName: 'Updated Spouse',
             spouseAge: 39,
             spousePhone: '07000000001',
@@ -153,11 +154,13 @@ describe('DashboardHome', () => {
       '"Renewal consent"',
       '"Contact update email"',
       '"Contact update address"',
+      '"Kerala home address"',
       '"Contact update membership type"',
       '"Contact update spouse age"',
       '"Contact update children"',
       '"contact@example.com"',
       '"Updated address"',
+      '"Kerala family home"',
       '"renewal@example.com"',
       '"Updated Spouse"',
       '"39"',
@@ -313,6 +316,64 @@ describe('DashboardHome', () => {
     await dashboard['loadMemberAddresses']({ Authorization: 'Basic test' });
 
     expect(dashboard['members'][0].address).toBe('Renewal address, SO53 2PL');
+  });
+
+  it('preserves populated contact fields when a newer update leaves them blank', async () => {
+    const dashboard = TestBed.createComponent(DashboardHome).componentInstance;
+    dashboard['members'] = [
+      {
+        membershipNumber: '20',
+        names: ['Member One'],
+        phones: [],
+        email: '',
+        address: '',
+      },
+    ];
+    spyOn(window, 'fetch').and.returnValue(
+      Promise.resolve(
+        new Response(JSON.stringify([
+          {
+            membershipNumber: '20',
+            createdAt: '2026-10-22T12:00:00.000Z',
+            name: 'Member One',
+            phone: '07123456789',
+            membershipType: 'family',
+            email: '',
+            address: '',
+            keralaHomeAddress: '',
+            spouseName: '',
+            spouseAge: null,
+            spousePhone: '',
+            children: [{ name: '', age: null }],
+          },
+          {
+            membershipNumber: '20',
+            createdAt: '2026-10-20T12:00:00.000Z',
+            name: 'Member One',
+            phone: '07123456789',
+            membershipType: 'family',
+            email: 'member@example.com',
+            address: 'Home address',
+            keralaHomeAddress: 'Kerala home',
+            spouseName: 'Spouse',
+            spouseAge: 38,
+            spousePhone: '07111222333',
+            children: [{ name: 'Child', age: 9 }],
+          },
+        ])),
+      ),
+    );
+
+    await dashboard['loadMemberAddresses']({ Authorization: 'Basic test' });
+
+    const member = dashboard['members'][0];
+    expect(member.email).toBe('member@example.com');
+    expect(member.address).toBe('Home address');
+    expect(member.contactDetails?.keralaHomeAddress).toBe('Kerala home');
+    expect(member.renewalDetails?.spouseName).toBe('Spouse');
+    expect(member.renewalDetails?.spouseAge).toBe(38);
+    expect(member.renewalDetails?.spousePhone).toBe('07111222333');
+    expect(member.renewalDetails?.children[0]).toEqual({ name: 'Child', age: 9 });
   });
 
   it('keeps a newer renewal address instead of an older contact-details address', async () => {

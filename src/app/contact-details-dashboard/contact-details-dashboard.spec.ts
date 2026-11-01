@@ -24,6 +24,7 @@ describe('ContactDetailsDashboard', () => {
       name: '=Formula',
       email: 'member@example.com',
       address: '1 Test Street',
+      keralaHomeAddress: 'Kerala address',
       spouseName: 'Spouse Name',
       spouseAge: 35,
       spousePhone: '07111111111',
@@ -34,10 +35,11 @@ describe('ContactDetailsDashboard', () => {
     const csv = dashboard['buildCsv']();
 
     expect(csv).toContain(
-      '"Membership number","Membership type","Name","Phone","Email","Address"',
+      '"Membership number","Membership type","Name","Phone","Email","Address","Kerala Home Address"',
     );
     expect(csv).toContain('"203","Family","\'=Formula","07123456789"');
     expect(csv).toContain('"Spouse Name","35","07111111111","Child Name (8)"');
+    expect(csv).toContain('"Kerala address"');
     expect(csv).toContain('"Agreed"');
   });
 

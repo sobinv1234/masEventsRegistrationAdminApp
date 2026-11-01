@@ -69,6 +69,7 @@ type ContactDetailsUpdate = {
   name: string;
   email: string;
   address: string;
+  keralaHomeAddress: string;
   spouseName: string;
   spouseAge: number | null;
   spousePhone: string;
@@ -1402,6 +1403,8 @@ function decryptContactDetailsUpdate(
     typeof value['name'] !== 'string' ||
     typeof value['email'] !== 'string' ||
     typeof value['address'] !== 'string' ||
+    (value['keralaHomeAddress'] !== undefined &&
+      typeof value['keralaHomeAddress'] !== 'string') ||
     (value['membershipType'] !== undefined &&
       value['membershipType'] !== 'individual' &&
       value['membershipType'] !== 'family') ||
@@ -1432,6 +1435,10 @@ function decryptContactDetailsUpdate(
     name: value['name'],
     email: value['email'],
     address: value['address'],
+    keralaHomeAddress:
+      typeof value['keralaHomeAddress'] === 'string'
+        ? value['keralaHomeAddress']
+        : '',
     spouseName: typeof value['spouseName'] === 'string' ? value['spouseName'] : '',
     spouseAge:
       typeof value['spouseAge'] === 'number' ? value['spouseAge'] : null,
@@ -1809,12 +1816,12 @@ app.post('/api/membership-phone-lookup', async (req, res, next) => {
           getRegistrations(),
         ])
       : [[], []];
-    const latestContactUpdates = new Map<string, ContactDetailsUpdate>();
+    const contactUpdatesByMembership = new Map<string, ContactDetailsUpdate[]>();
     for (const update of contactUpdates) {
       const membershipNumber = update.membershipNumber.trim().replace(/^0+(?=\d)/, '');
-      if (!latestContactUpdates.has(membershipNumber)) {
-        latestContactUpdates.set(membershipNumber, update);
-      }
+      const membershipUpdates = contactUpdatesByMembership.get(membershipNumber) ?? [];
+      membershipUpdates.push(update);
+      contactUpdatesByMembership.set(membershipNumber, membershipUpdates);
     }
     const registrations = encryptionKey
       ? storedRegistrations.map((row) => readRegistration(row, encryptionKey))
@@ -1835,26 +1842,41 @@ app.post('/api/membership-phone-lookup', async (req, res, next) => {
       .map((membershipNumber) => {
         const member = membershipDirectory[membershipNumber];
         const profile = profiles.get(membershipNumber);
-        const contactUpdate = latestContactUpdates.get(membershipNumber);
+        const membershipContactUpdates =
+          contactUpdatesByMembership.get(membershipNumber) ?? [];
         const membershipType =
           profile?.membershipType ?? getRenewedMembershipType(membershipNumber);
-        const latestFamilySource =
-          contactUpdate && (!profile || contactUpdate.createdAt > profile.createdAt)
-            ? contactUpdate
-            : profile;
-        const previousFamilySource =
-          latestFamilySource === profile ? contactUpdate : profile;
+        const familySources = [
+          ...(profile ? [{ createdAt: profile.createdAt, value: profile }] : []),
+          ...membershipContactUpdates.map((update) => ({
+            createdAt: update.createdAt,
+            value: update,
+          })),
+        ].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+        const latestFamilyText = (
+          select: (source: MembershipRenewal | ContactDetailsUpdate) => string | undefined,
+        ): string =>
+          familySources
+            .map(({ value }) => select(value)?.trim())
+            .find((value): value is string => Boolean(value)) ?? '';
+        const latestFamilyAge = (
+          select: (source: MembershipRenewal | ContactDetailsUpdate) => number | null,
+        ): number | null =>
+          familySources
+            .map(({ value }) => select(value))
+            .find((value): value is number => value !== null) ?? null;
+        const latestFamilyChildren = Array.from({ length: 4 }, (_, index) => ({
+          name: latestFamilyText((source) => source.children[index]?.name),
+          age: latestFamilyAge((source) => source.children[index]?.age ?? null),
+        }));
         const names = getMembershipNames(
           membershipNumber,
           member?.names ?? [],
           membershipType === 'family'
-            ? latestFamilySource?.spouseName || previousFamilySource?.spouseName
+            ? latestFamilyText((source) => source.spouseName)
             : undefined,
           membershipType === 'family'
-            ? (latestFamilySource?.children.map((child) => child.name).filter(Boolean).length
-                ? latestFamilySource.children.map((child) => child.name).filter(Boolean)
-                : previousFamilySource?.children.map((child) => child.name).filter(Boolean) ??
-                  [])
+            ? latestFamilyChildren.map((child) => child.name).filter(Boolean)
             : [],
         );
         const newestText = (
@@ -1871,38 +1893,40 @@ app.post('/api/membership-phone-lookup', async (req, res, next) => {
         const details: MembershipLookupDetails = {
           email: newestText(
             { createdAt: profile?.createdAt ?? '', value: profile?.email },
-            { createdAt: contactUpdate?.createdAt ?? '', value: contactUpdate?.email },
+            ...membershipContactUpdates.map((update) => ({
+              createdAt: update.createdAt,
+              value: update.email,
+            })),
             { createdAt: latestRegistration?.createdAt ?? '', value: latestRegistration?.email },
             { createdAt: '', value: member?.email },
           ),
           address: newestText(
             { createdAt: profile?.createdAt ?? '', value: profile?.address },
-            { createdAt: contactUpdate?.createdAt ?? '', value: contactUpdate?.address },
+            ...membershipContactUpdates.map((update) => ({
+              createdAt: update.createdAt,
+              value: update.address,
+            })),
+          ),
+          keralaHomeAddress: newestText(
+            ...membershipContactUpdates.map((update) => ({
+              createdAt: update.createdAt,
+              value: update.keralaHomeAddress,
+            })),
           ),
           postcode: profile?.postcode?.trim() ?? '',
           membershipHolderName:
             profile?.membershipHolderName ?? member?.names[0] ?? names[0] ?? '',
           memberAge: profile?.memberAge ?? latestRegistration?.age ?? null,
           spouseName:
-            latestFamilySource?.spouseName ||
-            previousFamilySource?.spouseName ||
+            latestFamilyText((source) => source.spouseName) ||
             membershipFamilyDirectory[membershipNumber]?.spouseName ||
             '',
-          spouseAge:
-            latestFamilySource?.spouseAge ??
-            previousFamilySource?.spouseAge ??
-            null,
+          spouseAge: latestFamilyAge((source) => source.spouseAge),
           spousePhone:
-            latestFamilySource?.spousePhone ||
-            previousFamilySource?.spousePhone ||
+            latestFamilyText((source) => source.spousePhone) ||
             membershipFamilyDirectory[membershipNumber]?.spousePhone ||
             '',
-          children:
-            latestFamilySource?.children.some(
-              (child) => child.name || child.age !== null,
-            )
-              ? latestFamilySource.children
-              : previousFamilySource?.children ?? [],
+          children: latestFamilyChildren,
         };
         return {
           membershipNumber,
@@ -1934,6 +1958,7 @@ app.post('/api/contact-details-updates', async (req, res, next) => {
     typeof value['name'] !== 'string' ||
     typeof value['email'] !== 'string' ||
     typeof value['address'] !== 'string' ||
+    typeof value['keralaHomeAddress'] !== 'string' ||
     typeof value['spouseName'] !== 'string' ||
     (value['spouseAge'] !== null && typeof value['spouseAge'] !== 'number') ||
     typeof value['spousePhone'] !== 'string' ||
@@ -1956,6 +1981,7 @@ app.post('/api/contact-details-updates', async (req, res, next) => {
   const name = value['name'].trim();
   const email = value['email'].trim();
   const address = value['address'].trim();
+  const keralaHomeAddress = value['keralaHomeAddress'].trim();
   const normalizedPhone = normalizePhoneNumber(phone);
   const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const directoryMember = membershipDirectory[membershipNumber];
@@ -1967,64 +1993,78 @@ app.post('/api/contact-details-updates', async (req, res, next) => {
   try {
     const profile = await getMembershipDirectoryProfile(encryptionKey, membershipNumber);
     const contactUpdates = await getContactDetailsUpdates(encryptionKey);
-    const previousUpdate = contactUpdates.find(
+    const membershipContactUpdates = contactUpdates.filter(
       (update) =>
         update.membershipNumber.trim().replace(/^0+(?=\d)/, '') ===
         membershipNumber,
     );
+    const storedText = (
+      profileValue: string | undefined,
+      selectUpdate: (update: ContactDetailsUpdate) => string | undefined,
+    ): string =>
+      [
+        ...(profile
+          ? [{ createdAt: profile.createdAt, value: profileValue }]
+          : []),
+        ...membershipContactUpdates.map((update) => ({
+          createdAt: update.createdAt,
+          value: selectUpdate(update),
+        })),
+      ]
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+        .map(({ value: storedValue }) => storedValue?.trim())
+        .find((storedValue): storedValue is string => Boolean(storedValue)) ?? '';
+    const storedAge = (
+      profileValue: number | null | undefined,
+      selectUpdate: (update: ContactDetailsUpdate) => number | null,
+    ): number | null =>
+      [
+        ...(profile
+          ? [{ createdAt: profile.createdAt, value: profileValue ?? null }]
+          : []),
+        ...membershipContactUpdates.map((update) => ({
+          createdAt: update.createdAt,
+          value: selectUpdate(update),
+        })),
+      ]
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+        .map(({ value: storedValue }) => storedValue)
+        .find((storedValue): storedValue is number => storedValue !== null) ?? null;
     const membershipType =
       profile?.membershipType ?? getRenewedMembershipType(membershipNumber);
     const spouseName =
       value['spouseName'].trim() ||
-      previousUpdate?.spouseName ||
-      profile?.spouseName ||
-      '';
+      storedText(profile?.spouseName, (update) => update.spouseName);
     const spousePhone =
       value['spousePhone'].trim() ||
-      previousUpdate?.spousePhone ||
-      profile?.spousePhone ||
-      '';
+      storedText(profile?.spousePhone, (update) => update.spousePhone);
     const spouseAge =
       value['spouseAge'] ??
-      previousUpdate?.spouseAge ??
-      profile?.spouseAge ??
-      null;
+      storedAge(profile?.spouseAge, (update) => update.spouseAge);
     const children = value['children'].map((child, index) => {
-      const previousChild = previousUpdate?.children[index];
-      const profileChild = profile?.children[index];
+      const storedChildName = storedText(
+        profile?.children[index]?.name,
+        (update) => update.children[index]?.name,
+      );
+      const storedChildAge = storedAge(
+        profile?.children[index]?.age,
+        (update) => update.children[index]?.age ?? null,
+      );
       return {
-        name:
-          child['name'].trim() ||
-          previousChild?.name ||
-          profileChild?.name ||
-          '',
-        age:
-          child['age'] ??
-          previousChild?.age ??
-          profileChild?.age ??
-          null,
+        name: child['name'].trim() || storedChildName,
+        age: child['age'] ?? storedChildAge,
       };
     });
-    const latestStoredText = (
-      profileValue: string | undefined,
-      updateValue: string | undefined,
-    ): string => {
-      const updateIsNewer =
-        !!previousUpdate &&
-        (!profile || previousUpdate.createdAt >= profile.createdAt);
-      return updateIsNewer
-        ? updateValue?.trim() || profileValue?.trim() || ''
-        : profileValue?.trim() || updateValue?.trim() || '';
-    };
     const mergedEmail =
       email ||
-      latestStoredText(profile?.email, previousUpdate?.email) ||
+      storedText(profile?.email, (update) => update.email) ||
       directoryMember?.email ||
       '';
-    const mergedAddress = address || latestStoredText(
-      profile?.address,
-      previousUpdate?.address,
-    );
+    const mergedAddress =
+      address || storedText(profile?.address, (update) => update.address);
+    const mergedKeralaHomeAddress =
+      keralaHomeAddress ||
+      storedText(undefined, (update) => update.keralaHomeAddress);
     const isValidAge = (age: unknown): age is number =>
       typeof age === 'number' && Number.isInteger(age) && age >= 0 && age <= 120;
     const familyDetailsValid =
@@ -2075,6 +2115,8 @@ app.post('/api/contact-details-updates', async (req, res, next) => {
       (email && !validEmail) ||
       email.length > 254 ||
       address.length > 500 ||
+      !mergedKeralaHomeAddress ||
+      mergedKeralaHomeAddress.length > 500 ||
       !phoneMatchesMembership ||
       value['membershipType'] !== membershipType ||
       !familyDetailsValid
@@ -2095,6 +2137,7 @@ app.post('/api/contact-details-updates', async (req, res, next) => {
       name,
       email: mergedEmail,
       address: mergedAddress,
+      keralaHomeAddress: mergedKeralaHomeAddress,
       spouseName,
       spouseAge,
       spousePhone,

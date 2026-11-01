@@ -125,6 +125,7 @@
                 <div><dt>Membership type</dt><dd>{{ record.membershipType === 'family' ? 'Family' : 'Individual' }}</dd></div>
                 <div><dt>Email</dt><dd><a [href]="'mailto:' + record.email">{{ record.email }}</a></dd></div>
                 <div><dt>Address</dt><dd>{{ record.address }}</dd></div>
+                <div><dt>Kerala Home Address</dt><dd>{{ record.keralaHomeAddress || 'Not provided' }}</dd></div>
                 @if (record.membershipType === 'family') {
                   <div>
                     <dt>Spouse</dt>

@@ -15,6 +15,7 @@ type Member = {
     phone: string;
     email: string;
     address: string;
+    keralaHomeAddress: string;
     membershipType?: 'individual' | 'family';
     spouseName: string;
     spouseAge: number | null;
@@ -52,6 +53,7 @@ type ContactDetailsUpdate = {
   membershipType?: 'individual' | 'family';
   email: string;
   address: string;
+  keralaHomeAddress?: string;
   spouseName?: string;
   spouseAge?: number | null;
   spousePhone?: string;
@@ -157,6 +159,9 @@ export class DashboardHome implements OnInit {
       contactDetails?.phone ? `Contact update phone: ${contactDetails.phone}` : '',
       contactDetails?.email ? `Contact update email: ${contactDetails.email}` : '',
       contactDetails?.address ? `Contact update address: ${contactDetails.address}` : '',
+      contactDetails?.keralaHomeAddress
+        ? `Kerala home address: ${contactDetails.keralaHomeAddress}`
+        : '',
       contactDetails?.spouseName
         ? `Contact update spouse: ${contactDetails.spouseName}${contactDetails.spouseAge !== null ? ` (${contactDetails.spouseAge})` : ''}`
         : '',
@@ -278,20 +283,22 @@ export class DashboardHome implements OnInit {
       }
 
       const updates: ContactDetailsUpdate[] = await response.json();
-      const updatesByMembership = new Map<string, ContactDetailsUpdate>();
+      const updatesByMembership = new Map<string, ContactDetailsUpdate[]>();
       for (const update of updates) {
         const membershipNumber = update.membershipNumber.trim();
-        const current = updatesByMembership.get(membershipNumber);
-        if (
-          membershipNumber &&
-          (!current || (update.createdAt ?? '') > (current.createdAt ?? ''))
-        ) {
-          updatesByMembership.set(membershipNumber, update);
+        if (membershipNumber) {
+          const membershipUpdates = updatesByMembership.get(membershipNumber) ?? [];
+          membershipUpdates.push(update);
+          updatesByMembership.set(membershipNumber, membershipUpdates);
         }
       }
 
       this.members = this.members.map((member) => {
-        const contactUpdate = updatesByMembership.get(member.membershipNumber);
+        const memberUpdates = updatesByMembership.get(member.membershipNumber) ?? [];
+        memberUpdates.sort((left, right) =>
+          (right.createdAt ?? '').localeCompare(left.createdAt ?? ''),
+        );
+        const contactUpdate = memberUpdates[0];
         const contactUpdateIsNewer =
           !!contactUpdate &&
           (!member.addressUpdatedAt ||
@@ -299,16 +306,32 @@ export class DashboardHome implements OnInit {
         if (!contactUpdate) {
           return member;
         }
+        const latestText = (select: (update: ContactDetailsUpdate) => string | undefined): string =>
+          memberUpdates
+            .map((update) => select(update)?.trim())
+            .find((value): value is string => Boolean(value)) ?? '';
+        const latestAge = (select: (update: ContactDetailsUpdate) => number | null | undefined): number | null =>
+          memberUpdates
+            .map(select)
+            .find((value): value is number => value !== null && value !== undefined) ?? null;
+        const spouseName = latestText((update) => update.spouseName);
+        const spouseAge = latestAge((update) => update.spouseAge);
+        const spousePhone = latestText((update) => update.spousePhone);
+        const children = Array.from({ length: 4 }, (_, index) => ({
+          name: latestText((update) => update.children?.[index]?.name),
+          age: latestAge((update) => update.children?.[index]?.age),
+        }));
         const contactDetails = {
           name: contactUpdate.name ?? '',
           phone: contactUpdate.phone ?? '',
-          email: contactUpdate.email ?? '',
-          address: contactUpdate.address ?? '',
+          email: latestText((update) => update.email),
+          address: latestText((update) => update.address),
+          keralaHomeAddress: latestText((update) => update.keralaHomeAddress),
           membershipType: contactUpdate.membershipType,
-          spouseName: contactUpdate.spouseName ?? '',
-          spouseAge: contactUpdate.spouseAge ?? null,
-          spousePhone: contactUpdate.spousePhone ?? '',
-          children: contactUpdate.children ?? [],
+          spouseName,
+          spouseAge,
+          spousePhone,
+          children,
           consent: contactUpdate.consent ?? false,
           updatedAt: contactUpdate.createdAt ?? '',
         };
@@ -317,22 +340,20 @@ export class DashboardHome implements OnInit {
         }
 
         const renewalDetails = member.renewalDetails;
-        const children = Array.from({ length: 4 }, (_, index) => {
+        const mergedChildren = Array.from({ length: 4 }, (_, index) => {
           const current = renewalDetails?.children[index];
-          const updated = contactUpdate.children?.[index];
+          const updated = contactDetails.children[index];
           return {
             name: updated?.name?.trim() || current?.name || '',
             age: updated?.age ?? current?.age ?? null,
           };
         });
-        const spouseName =
-          contactUpdate.spouseName?.trim() || renewalDetails?.spouseName || '';
-        const spouseAge = contactUpdate.spouseAge ?? renewalDetails?.spouseAge ?? null;
-        const spousePhone =
-          contactUpdate.spousePhone?.trim() || renewalDetails?.spousePhone || '';
+        const mergedSpouseName = spouseName || renewalDetails?.spouseName || '';
+        const mergedSpouseAge = spouseAge ?? renewalDetails?.spouseAge ?? null;
+        const mergedSpousePhone = spousePhone || renewalDetails?.spousePhone || '';
         const names = [...member.names];
-        if (spouseName && !names.includes(spouseName)) {
-          names.push(spouseName);
+        if (mergedSpouseName && !names.includes(mergedSpouseName)) {
+          names.push(mergedSpouseName);
         }
         for (const child of children) {
           if (child.name && !names.includes(child.name)) {
@@ -343,20 +364,20 @@ export class DashboardHome implements OnInit {
         if (contactDetails.phone && !phones.includes(contactDetails.phone)) {
           phones.unshift(contactDetails.phone);
         }
-        if (spousePhone && !phones.includes(spousePhone)) {
-          phones.push(spousePhone);
+        if (mergedSpousePhone && !phones.includes(mergedSpousePhone)) {
+          phones.push(mergedSpousePhone);
         }
         return {
           ...member,
           names,
           phones,
           email:
-            contactUpdate.email?.trim()
-              ? contactUpdate.email
+            contactDetails.email
+              ? contactDetails.email
               : member.email,
           address:
-            contactUpdate.address?.trim()
-              ? contactUpdate.address
+            contactDetails.address
+              ? contactDetails.address
               : member.address ?? '',
           contactDetails,
           renewalDetails: {
@@ -367,12 +388,12 @@ export class DashboardHome implements OnInit {
             email: renewalDetails?.email ?? member.email,
             address: renewalDetails?.address ?? '',
             memberAge: renewalDetails?.memberAge ?? null,
-            spouseName,
-            spouseAge,
-            children,
+            spouseName: mergedSpouseName,
+            spouseAge: mergedSpouseAge,
+            children: mergedChildren,
             otherFamilyMembers: renewalDetails?.otherFamilyMembers ?? '',
             postcode: renewalDetails?.postcode ?? '',
-            spousePhone,
+            spousePhone: mergedSpousePhone,
             additionalPhones: renewalDetails?.additionalPhones ?? '',
             phone: renewalDetails?.phone ?? '',
             consent: renewalDetails?.consent ?? false,
@@ -412,6 +433,7 @@ export class DashboardHome implements OnInit {
         'Contact update phone',
         'Contact update email',
         'Contact update address',
+        'Kerala home address',
         'Contact update spouse name',
         'Contact update spouse age',
         'Contact update spouse phone',
@@ -453,6 +475,7 @@ export class DashboardHome implements OnInit {
         member.contactDetails?.phone ?? '',
         member.contactDetails?.email ?? '',
         member.contactDetails?.address ?? '',
+        member.contactDetails?.keralaHomeAddress ?? '',
         member.contactDetails?.spouseName ?? '',
         member.contactDetails?.spouseAge?.toString() ?? '',
         member.contactDetails?.spousePhone ?? '',

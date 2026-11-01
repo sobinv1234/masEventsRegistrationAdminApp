@@ -31,6 +31,7 @@ export class ContactDetailsForm {
   }));
   protected email = '';
   protected address = '';
+  protected keralaHomeAddress = '';
   protected consent = false;
   protected matches: ContactMatch[] = [];
   protected selectedMatch = -1;
@@ -55,6 +56,7 @@ export class ContactDetailsForm {
     this.children = Array.from({ length: 4 }, () => ({ name: '', age: null }));
     this.email = '';
     this.address = '';
+    this.keralaHomeAddress = '';
     this.matches = [];
     this.selectedMatch = -1;
     this.phoneMatchVerified = false;
@@ -152,6 +154,7 @@ export class ContactDetailsForm {
     this.membershipType = match.membershipType;
     this.email = match.email || this.email;
     this.address = match.address || this.address;
+    this.keralaHomeAddress = match.keralaHomeAddress || this.keralaHomeAddress;
     this.spouseName = match.spouseName || this.spouseName;
     this.spouseAge = match.spouseAge ?? this.spouseAge;
     this.spousePhone = match.spousePhone || this.spousePhone;
@@ -192,6 +195,7 @@ export class ContactDetailsForm {
           children: this.children,
           email: this.email,
           address: this.address,
+          keralaHomeAddress: this.keralaHomeAddress,
           consent: this.consent,
         }),
       });
