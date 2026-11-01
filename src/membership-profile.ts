@@ -19,6 +19,18 @@ export type MembershipProfile = {
   consent: true;
 };
 
+export type MembershipLookupDetails = {
+  email: string;
+  address: string;
+  postcode: string;
+  membershipHolderName: string;
+  memberAge: number | null;
+  spouseName: string;
+  spouseAge: number | null;
+  spousePhone: string;
+  children: { name: string; age: number | null }[];
+};
+
 export function mergeMembershipProfile(
   current: MembershipProfile,
   incoming: MembershipProfile,

@@ -16,7 +16,19 @@ describe('MembershipRenewalForm', () => {
       Promise.resolve(
         new Response(
           JSON.stringify({
-            matches: [{ membershipNumber: '203', names: ['Shibu Merlin Thaliy'] }],
+            matches: [{
+              membershipNumber: '203',
+              names: ['Shibu Merlin Thaliy'],
+              membershipType: 'family',
+              email: 'member@example.com',
+              memberAge: 42,
+              address: '1 Example Road',
+              postcode: 'SO53 2PL',
+              spouseName: 'Spouse Name',
+              spouseAge: 39,
+              spousePhone: '07123456789',
+              children: [{ name: 'Child One', age: 8 }],
+            }],
           }),
           { status: 200 },
         ),
@@ -30,6 +42,16 @@ describe('MembershipRenewalForm', () => {
 
     expect(form['membershipNumber']).toBe('203');
     expect(form['membershipHolderName']).toBe('Shibu Merlin Thaliy');
+    expect(form['membershipType']).toBe('family');
+    expect(form['email']).toBe('member@example.com');
+    expect(form['memberAge']).toBe(42);
+    expect(form['address']).toBe('1 Example Road');
+    expect(form['postcode']).toBe('SO53 2PL');
+    expect(form['phone']).toBe('0741111775410');
+    expect(form['spouseName']).toBe('Spouse Name');
+    expect(form['spouseAge']).toBe(39);
+    expect(form['spousePhone']).toBe('07123456789');
+    expect(form['children'][0]).toEqual({ name: 'Child One', age: 8 });
   });
 
   it('requires choosing a name when mobile lookup returns multiple matches', async () => {

@@ -1,12 +1,13 @@
 import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import type { MembershipLookupDetails } from '../../membership-profile';
 
 type ContactMatch = {
   membershipNumber: string;
   names: string[];
   membershipType: 'individual' | 'family';
-};
+} & Partial<MembershipLookupDetails>;
 type ContactChild = { name: string; age: number | null };
 
 @Component({
@@ -53,6 +54,7 @@ export class ContactDetailsForm {
     this.spousePhone = '';
     this.children = Array.from({ length: 4 }, () => ({ name: '', age: null }));
     this.email = '';
+    this.address = '';
     this.matches = [];
     this.selectedMatch = -1;
     this.phoneMatchVerified = false;
@@ -148,6 +150,15 @@ export class ContactDetailsForm {
     this.membershipNumber = match.membershipNumber;
     this.name = match.names.join(', ');
     this.membershipType = match.membershipType;
+    this.email = match.email || this.email;
+    this.address = match.address || this.address;
+    this.spouseName = match.spouseName || this.spouseName;
+    this.spouseAge = match.spouseAge ?? this.spouseAge;
+    this.spousePhone = match.spousePhone || this.spousePhone;
+    this.children = Array.from({ length: 4 }, (_, childIndex) => ({
+      name: match.children?.[childIndex]?.name || this.children[childIndex]?.name || '',
+      age: match.children?.[childIndex]?.age ?? this.children[childIndex]?.age ?? null,
+    }));
     this.phoneMatchVerified = true;
     this.errorMessage = '';
     this.lookupMessage = 'Member details found. Please check and complete your details.';

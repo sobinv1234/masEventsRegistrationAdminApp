@@ -1,9 +1,13 @@
 import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import type { MembershipLookupDetails } from '../../membership-profile';
 
 type Game = 'Carroms' | 'Chess' | 'PlayStation' | 'Cards';
-type MembershipPhoneMatch = { membershipNumber: string; names: string[] };
+type MembershipPhoneMatch = {
+  membershipNumber: string;
+  names: string[];
+} & Partial<MembershipLookupDetails>;
 const enterNewNameOption = '__enter_new_name__';
 
 @Component({
@@ -23,6 +27,7 @@ export class Registration {
   protected membershipLookupLoading = false;
   protected membershipLookupMessage = '';
   protected membershipStatus: 'renewal' | 'register' | null = null;
+  protected phoneLookupNeedsRenewal = false;
   protected phoneLookupMatches: MembershipPhoneMatch[] = [];
   protected phoneLookupLoading = false;
   protected phoneLookupMessage = '';
@@ -43,6 +48,9 @@ export class Registration {
   private lastPhoneLookup = '';
   private lastPhoneMembershipNumber = '';
   private phoneLookupRequest = 0;
+  private selectedPhoneLookupMatch: MembershipPhoneMatch | null = null;
+  private phoneAutofilledEmail = '';
+  private phoneAutofilledAge: number | null = null;
 
   protected get minor(): boolean {
     return this.age !== null && this.age < 18;
@@ -71,12 +79,20 @@ export class Registration {
   }
 
   protected onMembershipNumberChange(): void {
+    if (
+      this.selectedPhoneLookupMatch &&
+      this.membershipNumber.trim() !==
+        this.selectedPhoneLookupMatch.membershipNumber
+    ) {
+      this.selectedPhoneLookupMatch = null;
+    }
     this.membershipNumberValid = false;
     this.lastLookedUpMembershipNumber = '';
     this.membershipNames = [];
     this.customNameSelected = false;
     this.membershipLookupMessage = '';
     this.membershipStatus = null;
+    this.phoneLookupNeedsRenewal = false;
     this.membershipLookupLoading = false;
     this.membershipLookupRequest += 1;
     if (this.lastAutofilledName && this.name === this.lastAutofilledName) {
@@ -87,10 +103,22 @@ export class Registration {
 
   protected onPhoneChange(): void {
     this.phoneLookupRequest += 1;
+    if (this.phoneAutofilledEmail && this.email === this.phoneAutofilledEmail) {
+      this.email = '';
+    }
+    if (this.phoneAutofilledAge !== null && this.age === this.phoneAutofilledAge) {
+      this.age = null;
+      this.onAgeChange();
+    }
+    this.phoneAutofilledEmail = '';
+    this.phoneAutofilledAge = null;
+    this.selectedPhoneLookupMatch = null;
     this.phoneLookupMatches = [];
     this.phoneLookupLoading = false;
     this.phoneLookupMessage = '';
     this.lastPhoneLookup = '';
+    this.membershipStatus = null;
+    this.phoneLookupNeedsRenewal = false;
 
     if (
       this.lastPhoneMembershipNumber &&
@@ -130,8 +158,10 @@ export class Registration {
 
       if (response.status === 404) {
         this.lastPhoneLookup = normalizedPhone;
+        this.membershipStatus = 'renewal';
+        this.phoneLookupNeedsRenewal = true;
         this.phoneLookupMessage =
-          'No matching member found. Enter the membership number manually.';
+          'We could not find a membership linked to this phone number. Please renew your membership.';
         return;
       }
       if (!response.ok) {
@@ -196,6 +226,11 @@ export class Registration {
   }
 
   private async selectPhoneLookupMatch(match: MembershipPhoneMatch): Promise<void> {
+    this.selectedPhoneLookupMatch = match;
+    if (match.email) {
+      this.email = match.email;
+      this.phoneAutofilledEmail = match.email;
+    }
     this.membershipNumber = match.membershipNumber;
     this.lastPhoneMembershipNumber = match.membershipNumber;
     this.phoneLookupMatches = [];
@@ -303,6 +338,7 @@ export class Registration {
       if (this.membershipNames.length === 1) {
         this.name = this.membershipNames[0];
         this.lastAutofilledName = this.name;
+        this.applyPhoneMatchedAge(this.name);
         this.membershipLookupMessage =
           'Member found. You can edit the participant name if needed.';
       } else {
@@ -342,13 +378,37 @@ export class Registration {
 
     this.customNameSelected = false;
     this.lastAutofilledName = this.name;
+    this.applyPhoneMatchedAge(this.name);
     if (this.name) {
       this.membershipLookupMessage = 'Member name selected.';
     }
   }
 
+  private applyPhoneMatchedAge(name: string): void {
+    const match = this.selectedPhoneLookupMatch;
+    if (!match || !name) {
+      return;
+    }
+    const normalizedName = name.trim().toLocaleLowerCase();
+    const age =
+      (match.membershipHolderName?.trim().toLocaleLowerCase() === normalizedName ||
+      match.names[0]?.trim().toLocaleLowerCase() === normalizedName
+        ? match.memberAge
+        : match.spouseName?.trim().toLocaleLowerCase() === normalizedName
+          ? match.spouseAge
+          : match.children?.find(
+              (child) => child.name.trim().toLocaleLowerCase() === normalizedName,
+            )?.age) ?? null;
+    if (age !== null) {
+      this.age = age;
+      this.phoneAutofilledAge = age;
+      this.onAgeChange();
+    }
+  }
+
   protected dismissMembershipStatus(): void {
     this.membershipStatus = null;
+    this.phoneLookupNeedsRenewal = false;
   }
 
   protected toggleGame(game: Game, event: Event): void {
@@ -460,6 +520,9 @@ export class Registration {
     this.lastAutofilledName = '';
     this.lastPhoneLookup = '';
     this.lastPhoneMembershipNumber = '';
+    this.selectedPhoneLookupMatch = null;
+    this.phoneAutofilledEmail = '';
+    this.phoneAutofilledAge = null;
     this.membershipLookupRequest += 1;
     this.phoneLookupRequest += 1;
     this.age = null;

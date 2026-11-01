@@ -71,7 +71,7 @@
           Full Name <span aria-hidden="true">*</span>
           <input
             name="name"
-            [value]="name"
+            [value]="name.split(', ')[0]"
             autocomplete="name"
             maxlength="500"
             required
@@ -119,6 +119,7 @@
                   Child {{ index + 1 }} name
                   <input
                     [name]="'childName' + index"
+                    [attr.name]="'childName' + index"
                     [(ngModel)]="child.name"
                     maxlength="120"
                     autocomplete="off"
@@ -128,6 +129,7 @@
                   Child {{ index + 1 }} age
                   <input
                     [name]="'childAge' + index"
+                    [attr.name]="'childAge' + index"
                     type="number"
                     [(ngModel)]="child.age"
                     min="0"
@@ -146,7 +148,6 @@
             [(ngModel)]="email"
             autocomplete="email"
             maxlength="254"
-            required
           />
         </label>
         <label class="field">
@@ -157,7 +158,6 @@
             autocomplete="street-address"
             rows="3"
             maxlength="500"
-            required
           ></textarea>
         </label>
 

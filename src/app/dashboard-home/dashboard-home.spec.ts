@@ -90,6 +90,89 @@ describe('DashboardHome', () => {
     expect(csv).toContain('"20","\'=Formula","07123456789","member@example.com","1 Test Street"');
   });
 
+  it('exports renewal and contact-update form fields including spouse and children', async () => {
+    const dashboard = TestBed.createComponent(DashboardHome).componentInstance;
+    dashboard['members'] = [
+      {
+        membershipNumber: '20',
+        names: ['Member One'],
+        phones: ['07123456789'],
+        email: 'renewal@example.com',
+        address: 'Renewal address, SO53 2PL',
+        addressUpdatedAt: '2026-10-20T10:00:00.000Z',
+        renewalDetails: {
+          membershipType: 'family',
+          membershipHolderName: 'Member One',
+          mobileNumber: '07411112222',
+          email: 'renewal@example.com',
+          address: 'Renewal address',
+          memberAge: 42,
+          spouseName: 'Renewal Spouse',
+          spouseAge: 40,
+          children: [{ name: 'Renewal Child', age: 12 }],
+          otherFamilyMembers: 'Grandparent (70)',
+          postcode: 'SO53 2PL',
+          phone: '07123456789',
+          spousePhone: '07111222333',
+          additionalPhones: 'Uncle: 07999888777',
+          consent: true,
+        },
+      },
+    ];
+    spyOn(window, 'fetch').and.resolveTo(
+      new Response(
+        JSON.stringify([
+          {
+            membershipNumber: '20',
+            createdAt: '2026-10-22T10:00:00.000Z',
+            name: 'Member One, Updated Spouse',
+            phone: '07000000000',
+            membershipType: 'family',
+            email: 'contact@example.com',
+            address: 'Updated address',
+            spouseName: 'Updated Spouse',
+            spouseAge: 39,
+            spousePhone: '07000000001',
+            children: [{ name: 'Updated Child', age: 11 }],
+            consent: true,
+          },
+        ]),
+      ),
+    );
+
+    await dashboard['loadMemberAddresses']({ Authorization: 'Basic test' });
+    const csv = dashboard['buildCsv']();
+
+    for (const field of [
+      '"Renewal submitted at"',
+      '"Renewal membership holder"',
+      '"Renewal mobile number"',
+      '"Renewal email"',
+      '"Renewal address"',
+      '"Renewal phone"',
+      '"Renewal consent"',
+      '"Contact update email"',
+      '"Contact update address"',
+      '"Contact update membership type"',
+      '"Contact update spouse age"',
+      '"Contact update children"',
+      '"contact@example.com"',
+      '"Updated address"',
+      '"renewal@example.com"',
+      '"Updated Spouse"',
+      '"39"',
+      '"07000000001"',
+      '"Updated Child age 11"',
+      '"Grandparent (70)"',
+      '"Uncle: 07999888777"',
+    ]) {
+      expect(csv).toContain(field);
+    }
+    expect(dashboard['formatRenewalDetails'](dashboard['members'][0])).toContain(
+      'Contact update spouse: Updated Spouse (39)',
+    );
+  });
+
   it('shows the additional member information supplied in a renewal', () => {
     const fixture = TestBed.createComponent(DashboardHome);
     const dashboard = fixture.componentInstance;
@@ -151,6 +234,65 @@ describe('DashboardHome', () => {
 
     expect(dashboard['members'][0].address).toBe('Latest address');
     expect(dashboard['members'][0].email).toBe('latest@example.com');
+  });
+
+  it('preserves renewal details when a contact update leaves those fields blank', async () => {
+    const dashboard = TestBed.createComponent(DashboardHome).componentInstance;
+    dashboard['members'] = [
+      {
+        membershipNumber: '20',
+        names: ['Member One', 'Existing Spouse'],
+        phones: ['07123456789', '07111222333'],
+        email: 'renewal@example.com',
+        address: 'Renewal address, SO53 2PL',
+        addressUpdatedAt: '2026-10-20T12:00:00.000Z',
+        renewalDetails: {
+          membershipType: 'family',
+          mobileNumber: '07411112222',
+          memberAge: 42,
+          spouseName: 'Existing Spouse',
+          spouseAge: 40,
+          children: [{ name: 'Existing Child', age: 12 }],
+          otherFamilyMembers: 'Grandparent (70)',
+          postcode: 'SO53 2PL',
+          phone: '07123456789',
+          spousePhone: '07111222333',
+          additionalPhones: 'Uncle: 07999888777',
+          consent: true,
+        },
+      },
+    ];
+    spyOn(window, 'fetch').and.resolveTo(
+      new Response(
+        JSON.stringify([
+          {
+            membershipNumber: '20',
+            createdAt: '2026-10-22T12:00:00.000Z',
+            name: 'Member One',
+            phone: '07123456789',
+            membershipType: 'family',
+            email: '',
+            address: '',
+            spouseName: '',
+            spouseAge: null,
+            spousePhone: '',
+            children: [{ name: '', age: null }],
+          },
+        ]),
+      ),
+    );
+
+    await dashboard['loadMemberAddresses']({ Authorization: 'Basic test' });
+
+    expect(dashboard['members'][0].email).toBe('renewal@example.com');
+    expect(dashboard['members'][0].address).toBe('Renewal address, SO53 2PL');
+    expect(dashboard['members'][0].renewalDetails?.spouseName).toBe('Existing Spouse');
+    expect(dashboard['members'][0].renewalDetails?.spouseAge).toBe(40);
+    expect(dashboard['members'][0].renewalDetails?.spousePhone).toBe('07111222333');
+    expect(dashboard['members'][0].renewalDetails?.children[0]).toEqual({
+      name: 'Existing Child',
+      age: 12,
+    });
   });
 
   it('keeps the renewal address when no contact-details update exists', async () => {

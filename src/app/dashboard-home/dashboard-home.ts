@@ -10,9 +10,26 @@ type Member = {
   email: string;
   address?: string;
   addressUpdatedAt?: string;
+  contactDetails?: {
+    name: string;
+    phone: string;
+    email: string;
+    address: string;
+    membershipType?: 'individual' | 'family';
+    spouseName: string;
+    spouseAge: number | null;
+    spousePhone: string;
+    children: { name: string; age: number | null }[];
+    consent: boolean;
+    updatedAt: string;
+  } | null;
   renewalDetails?: {
     membershipType: 'individual' | 'family';
-    memberAge: number;
+    membershipHolderName?: string;
+    mobileNumber?: string;
+    email?: string;
+    address?: string;
+    memberAge: number | null;
     spouseName: string;
     spouseAge: number | null;
     children: { name: string; age: number | null }[];
@@ -20,6 +37,8 @@ type Member = {
     postcode: string;
     spousePhone: string;
     additionalPhones: string;
+    phone?: string;
+    consent?: boolean;
   } | null;
 };
 
@@ -28,8 +47,16 @@ type Registration = { membershipNumber?: string };
 type ContactDetailsUpdate = {
   createdAt?: string;
   membershipNumber: string;
+  name?: string;
+  phone?: string;
+  membershipType?: 'individual' | 'family';
   email: string;
   address: string;
+  spouseName?: string;
+  spouseAge?: number | null;
+  spousePhone?: string;
+  children?: { name: string; age: number | null }[];
+  consent?: boolean;
 };
 
 type Event = {
@@ -107,22 +134,35 @@ export class DashboardHome implements OnInit {
 
   protected formatRenewalDetails(member: Member): string {
     const details = member.renewalDetails;
-    if (!details) {
-      return '';
-    }
+    const contactDetails = member.contactDetails;
     return [
-      `${details.membershipType} membership`,
-      `Member age: ${details.memberAge}`,
-      details.spouseName
+      details ? `${details.membershipType} membership` : '',
+      details?.memberAge !== null && details?.memberAge !== undefined
+        ? `Member age: ${details.memberAge}`
+        : '',
+      details?.spouseName
         ? `Spouse: ${details.spouseName}${details.spouseAge !== null ? ` (${details.spouseAge})` : ''}`
         : '',
-      ...details.children
+      ...(details?.children ?? [])
         .filter((child) => child.name)
         .map((child) => `Child: ${child.name}${child.age !== null ? ` (${child.age})` : ''}`),
-      details.otherFamilyMembers,
-      details.postcode ? `Postcode: ${details.postcode}` : '',
-      details.spousePhone ? `Spouse phone: ${details.spousePhone}` : '',
-      details.additionalPhones,
+      details?.otherFamilyMembers ?? '',
+      details?.postcode ? `Postcode: ${details.postcode}` : '',
+      details?.spousePhone ? `Spouse phone: ${details.spousePhone}` : '',
+      details?.additionalPhones ?? '',
+      contactDetails?.name ? `Contact update: ${contactDetails.name}` : '',
+      contactDetails?.membershipType
+        ? `Contact update membership type: ${contactDetails.membershipType}`
+        : '',
+      contactDetails?.phone ? `Contact update phone: ${contactDetails.phone}` : '',
+      contactDetails?.email ? `Contact update email: ${contactDetails.email}` : '',
+      contactDetails?.address ? `Contact update address: ${contactDetails.address}` : '',
+      contactDetails?.spouseName
+        ? `Contact update spouse: ${contactDetails.spouseName}${contactDetails.spouseAge !== null ? ` (${contactDetails.spouseAge})` : ''}`
+        : '',
+      ...((contactDetails?.children ?? [])
+        .filter((child) => child.name)
+        .map((child) => `Contact update child: ${child.name}${child.age !== null ? ` (${child.age})` : ''}`)),
     ]
       .filter(Boolean)
       .join('; ');
@@ -238,44 +278,105 @@ export class DashboardHome implements OnInit {
       }
 
       const updates: ContactDetailsUpdate[] = await response.json();
-      const addressesByMembership = new Map<
-        string,
-        { email: string; address: string; createdAt: string }
-      >();
+      const updatesByMembership = new Map<string, ContactDetailsUpdate>();
       for (const update of updates) {
         const membershipNumber = update.membershipNumber.trim();
-        if (membershipNumber && update.address.trim()) {
-          const current = addressesByMembership.get(membershipNumber);
-          if (
-            !current ||
-            (update.createdAt && update.createdAt > current.createdAt)
-          ) {
-            addressesByMembership.set(membershipNumber, {
-              email: update.email,
-              address: update.address,
-              createdAt: update.createdAt ?? '',
-            });
-          }
+        const current = updatesByMembership.get(membershipNumber);
+        if (
+          membershipNumber &&
+          (!current || (update.createdAt ?? '') > (current.createdAt ?? ''))
+        ) {
+          updatesByMembership.set(membershipNumber, update);
         }
       }
 
       this.members = this.members.map((member) => {
-        const contactUpdate = addressesByMembership.get(member.membershipNumber);
+        const contactUpdate = updatesByMembership.get(member.membershipNumber);
         const contactUpdateIsNewer =
           !!contactUpdate &&
-          (!contactUpdate.createdAt ||
-            !member.addressUpdatedAt ||
-            contactUpdate.createdAt >= member.addressUpdatedAt);
+          (!member.addressUpdatedAt ||
+            (contactUpdate.createdAt ?? '') >= member.addressUpdatedAt);
+        if (!contactUpdate) {
+          return member;
+        }
+        const contactDetails = {
+          name: contactUpdate.name ?? '',
+          phone: contactUpdate.phone ?? '',
+          email: contactUpdate.email ?? '',
+          address: contactUpdate.address ?? '',
+          membershipType: contactUpdate.membershipType,
+          spouseName: contactUpdate.spouseName ?? '',
+          spouseAge: contactUpdate.spouseAge ?? null,
+          spousePhone: contactUpdate.spousePhone ?? '',
+          children: contactUpdate.children ?? [],
+          consent: contactUpdate.consent ?? false,
+          updatedAt: contactUpdate.createdAt ?? '',
+        };
+        if (!contactUpdateIsNewer) {
+          return { ...member, contactDetails };
+        }
+
+        const renewalDetails = member.renewalDetails;
+        const children = Array.from({ length: 4 }, (_, index) => {
+          const current = renewalDetails?.children[index];
+          const updated = contactUpdate.children?.[index];
+          return {
+            name: updated?.name?.trim() || current?.name || '',
+            age: updated?.age ?? current?.age ?? null,
+          };
+        });
+        const spouseName =
+          contactUpdate.spouseName?.trim() || renewalDetails?.spouseName || '';
+        const spouseAge = contactUpdate.spouseAge ?? renewalDetails?.spouseAge ?? null;
+        const spousePhone =
+          contactUpdate.spousePhone?.trim() || renewalDetails?.spousePhone || '';
+        const names = [...member.names];
+        if (spouseName && !names.includes(spouseName)) {
+          names.push(spouseName);
+        }
+        for (const child of children) {
+          if (child.name && !names.includes(child.name)) {
+            names.push(child.name);
+          }
+        }
+        const phones = [...member.phones];
+        if (contactDetails.phone && !phones.includes(contactDetails.phone)) {
+          phones.unshift(contactDetails.phone);
+        }
+        if (spousePhone && !phones.includes(spousePhone)) {
+          phones.push(spousePhone);
+        }
         return {
           ...member,
+          names,
+          phones,
           email:
-            contactUpdateIsNewer && contactUpdate.email
+            contactUpdate.email?.trim()
               ? contactUpdate.email
               : member.email,
           address:
-            contactUpdateIsNewer
+            contactUpdate.address?.trim()
               ? contactUpdate.address
               : member.address ?? '',
+          contactDetails,
+          renewalDetails: {
+            membershipType:
+              contactDetails.membershipType ?? renewalDetails?.membershipType ?? 'individual',
+            membershipHolderName: renewalDetails?.membershipHolderName ?? '',
+            mobileNumber: renewalDetails?.mobileNumber ?? '',
+            email: renewalDetails?.email ?? member.email,
+            address: renewalDetails?.address ?? '',
+            memberAge: renewalDetails?.memberAge ?? null,
+            spouseName,
+            spouseAge,
+            children,
+            otherFamilyMembers: renewalDetails?.otherFamilyMembers ?? '',
+            postcode: renewalDetails?.postcode ?? '',
+            spousePhone,
+            additionalPhones: renewalDetails?.additionalPhones ?? '',
+            phone: renewalDetails?.phone ?? '',
+            consent: renewalDetails?.consent ?? false,
+          },
         };
       });
     } catch (error) {
@@ -296,7 +397,40 @@ export class DashboardHome implements OnInit {
         'Phone number(s)',
         'Email address',
         'Address',
-        'Renewal details',
+        'Postcode',
+        'Membership type',
+        'Renewal membership holder',
+        'Renewal submitted at',
+        'Renewal mobile number',
+        'Renewal email',
+        'Renewal address',
+        'Member age',
+        'Renewal phone',
+        'Renewal consent',
+        'Contact update name',
+        'Contact update membership type',
+        'Contact update phone',
+        'Contact update email',
+        'Contact update address',
+        'Contact update spouse name',
+        'Contact update spouse age',
+        'Contact update spouse phone',
+        'Contact update children',
+        'Contact update consent',
+        'Contact update submitted at',
+        'Spouse name',
+        'Spouse age',
+        'Spouse phone',
+        'Child 1 name',
+        'Child 1 age',
+        'Child 2 name',
+        'Child 2 age',
+        'Child 3 name',
+        'Child 3 age',
+        'Child 4 name',
+        'Child 4 age',
+        'Other family members and ages',
+        'Additional phone numbers',
       ],
       ...this.members.map((member) => [
         member.membershipNumber,
@@ -304,7 +438,43 @@ export class DashboardHome implements OnInit {
         member.phones.join(', '),
         member.email,
         member.address ?? '',
-        this.formatRenewalDetails(member),
+        member.renewalDetails?.postcode ?? '',
+        member.renewalDetails?.membershipType ?? '',
+        member.renewalDetails?.membershipHolderName ?? '',
+        member.addressUpdatedAt ?? '',
+        member.renewalDetails?.mobileNumber ?? '',
+        member.renewalDetails?.email ?? '',
+        member.renewalDetails?.address ?? '',
+        member.renewalDetails?.memberAge?.toString() ?? '',
+        member.renewalDetails?.phone ?? '',
+        member.renewalDetails?.consent ? 'Agreed' : '',
+        member.contactDetails?.name ?? '',
+        member.contactDetails?.membershipType ?? '',
+        member.contactDetails?.phone ?? '',
+        member.contactDetails?.email ?? '',
+        member.contactDetails?.address ?? '',
+        member.contactDetails?.spouseName ?? '',
+        member.contactDetails?.spouseAge?.toString() ?? '',
+        member.contactDetails?.spousePhone ?? '',
+        member.contactDetails?.children
+          .map((child) =>
+            [child.name, child.age === null ? '' : `age ${child.age}`]
+              .filter(Boolean)
+              .join(' '),
+          )
+          .filter(Boolean)
+          .join('; ') ?? '',
+        member.contactDetails?.consent ? 'Agreed' : '',
+        member.contactDetails?.updatedAt ?? '',
+        member.renewalDetails?.spouseName ?? '',
+        member.renewalDetails?.spouseAge?.toString() ?? '',
+        member.renewalDetails?.spousePhone ?? '',
+        ...Array.from({ length: 4 }, (_, index) => [
+          member.renewalDetails?.children[index]?.name ?? '',
+          member.renewalDetails?.children[index]?.age?.toString() ?? '',
+        ]).flat(),
+        member.renewalDetails?.otherFamilyMembers ?? '',
+        member.renewalDetails?.additionalPhones ?? '',
       ]),
     ];
 

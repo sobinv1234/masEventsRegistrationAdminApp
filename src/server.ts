@@ -25,11 +25,13 @@ import {
 } from './renewed-memberships';
 import {
   mergeMembershipProfile,
+  type MembershipLookupDetails,
   type MembershipProfile,
 } from './membership-profile';
 import {
   getMembershipNames,
   getMembershipPhoneNumbers,
+  membershipFamilyDirectory,
 } from './membership-family-directory';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
@@ -1796,32 +1798,117 @@ app.post('/api/membership-phone-lookup', async (req, res, next) => {
 
   try {
     const encryptionKey = getEncryptionKey();
+    const hasStorage = Boolean(encryptionKey && hasPersistentStorageConfigured());
     const profiles =
-      encryptionKey && hasPersistentStorageConfigured()
+      hasStorage && encryptionKey
         ? await getMembershipDirectoryProfiles(encryptionKey)
         : new Map<string, MembershipRenewal>();
-    const matches = Object.entries(membershipDirectory)
-      .filter(([membershipNumber, member]) => {
+    const [contactUpdates, storedRegistrations] = hasStorage && encryptionKey
+      ? await Promise.all([
+          getContactDetailsUpdates(encryptionKey),
+          getRegistrations(),
+        ])
+      : [[], []];
+    const latestContactUpdates = new Map<string, ContactDetailsUpdate>();
+    for (const update of contactUpdates) {
+      const membershipNumber = update.membershipNumber.trim().replace(/^0+(?=\d)/, '');
+      if (!latestContactUpdates.has(membershipNumber)) {
+        latestContactUpdates.set(membershipNumber, update);
+      }
+    }
+    const registrations = encryptionKey
+      ? storedRegistrations.map((row) => readRegistration(row, encryptionKey))
+      : [];
+    const candidateMembershipNumbers = new Set([
+      ...Object.keys(membershipDirectory),
+      ...profiles.keys(),
+      ...Object.keys(membershipFamilyDirectory),
+    ]);
+    const matches = [...candidateMembershipNumbers]
+      .filter((membershipNumber) => {
+        const member = membershipDirectory[membershipNumber];
         const profile = profiles.get(membershipNumber);
-        return getMemberPhoneNumbers(membershipNumber, member.phone, profile).some(
+        return getMemberPhoneNumbers(membershipNumber, member?.phone, profile).some(
           (phone) => normalizePhoneNumber(phone) === normalizedPhone,
         );
       })
-      .map(([membershipNumber, member]) => {
+      .map((membershipNumber) => {
+        const member = membershipDirectory[membershipNumber];
         const profile = profiles.get(membershipNumber);
+        const contactUpdate = latestContactUpdates.get(membershipNumber);
         const membershipType =
           profile?.membershipType ?? getRenewedMembershipType(membershipNumber);
+        const latestFamilySource =
+          contactUpdate && (!profile || contactUpdate.createdAt > profile.createdAt)
+            ? contactUpdate
+            : profile;
+        const previousFamilySource =
+          latestFamilySource === profile ? contactUpdate : profile;
+        const names = getMembershipNames(
+          membershipNumber,
+          member?.names ?? [],
+          membershipType === 'family'
+            ? latestFamilySource?.spouseName || previousFamilySource?.spouseName
+            : undefined,
+          membershipType === 'family'
+            ? (latestFamilySource?.children.map((child) => child.name).filter(Boolean).length
+                ? latestFamilySource.children.map((child) => child.name).filter(Boolean)
+                : previousFamilySource?.children.map((child) => child.name).filter(Boolean) ??
+                  [])
+            : [],
+        );
+        const newestText = (
+          ...sources: { createdAt: string; value: string | undefined }[]
+        ): string =>
+          sources
+            .filter((source) => source.value?.trim())
+            .sort((left, right) =>
+              right.createdAt.localeCompare(left.createdAt),
+            )[0]?.value?.trim() ?? '';
+        const latestRegistration = registrations.find(
+          (registration) => registration.membershipNumber === membershipNumber,
+        );
+        const details: MembershipLookupDetails = {
+          email: newestText(
+            { createdAt: profile?.createdAt ?? '', value: profile?.email },
+            { createdAt: contactUpdate?.createdAt ?? '', value: contactUpdate?.email },
+            { createdAt: latestRegistration?.createdAt ?? '', value: latestRegistration?.email },
+            { createdAt: '', value: member?.email },
+          ),
+          address: newestText(
+            { createdAt: profile?.createdAt ?? '', value: profile?.address },
+            { createdAt: contactUpdate?.createdAt ?? '', value: contactUpdate?.address },
+          ),
+          postcode: profile?.postcode?.trim() ?? '',
+          membershipHolderName:
+            profile?.membershipHolderName ?? member?.names[0] ?? names[0] ?? '',
+          memberAge: profile?.memberAge ?? latestRegistration?.age ?? null,
+          spouseName:
+            latestFamilySource?.spouseName ||
+            previousFamilySource?.spouseName ||
+            membershipFamilyDirectory[membershipNumber]?.spouseName ||
+            '',
+          spouseAge:
+            latestFamilySource?.spouseAge ??
+            previousFamilySource?.spouseAge ??
+            null,
+          spousePhone:
+            latestFamilySource?.spousePhone ||
+            previousFamilySource?.spousePhone ||
+            membershipFamilyDirectory[membershipNumber]?.spousePhone ||
+            '',
+          children:
+            latestFamilySource?.children.some(
+              (child) => child.name || child.age !== null,
+            )
+              ? latestFamilySource.children
+              : previousFamilySource?.children ?? [],
+        };
         return {
           membershipNumber,
           membershipType,
-          names: getMembershipNames(
-            membershipNumber,
-            member.names,
-            membershipType === 'family' ? profile?.spouseName : undefined,
-            membershipType === 'family'
-              ? (profile?.children.map((child) => child.name) ?? [])
-              : [],
-          ),
+          names,
+          ...details,
         };
       });
 
@@ -1879,15 +1966,65 @@ app.post('/api/contact-details-updates', async (req, res, next) => {
   }
   try {
     const profile = await getMembershipDirectoryProfile(encryptionKey, membershipNumber);
+    const contactUpdates = await getContactDetailsUpdates(encryptionKey);
+    const previousUpdate = contactUpdates.find(
+      (update) =>
+        update.membershipNumber.trim().replace(/^0+(?=\d)/, '') ===
+        membershipNumber,
+    );
     const membershipType =
       profile?.membershipType ?? getRenewedMembershipType(membershipNumber);
-    const spouseName = value['spouseName'].trim();
-    const spousePhone = value['spousePhone'].trim();
-    const spouseAge = value['spouseAge'];
-    const children = value['children'].map((child) => ({
-      name: child['name'].trim(),
-      age: child['age'],
-    }));
+    const spouseName =
+      value['spouseName'].trim() ||
+      previousUpdate?.spouseName ||
+      profile?.spouseName ||
+      '';
+    const spousePhone =
+      value['spousePhone'].trim() ||
+      previousUpdate?.spousePhone ||
+      profile?.spousePhone ||
+      '';
+    const spouseAge =
+      value['spouseAge'] ??
+      previousUpdate?.spouseAge ??
+      profile?.spouseAge ??
+      null;
+    const children = value['children'].map((child, index) => {
+      const previousChild = previousUpdate?.children[index];
+      const profileChild = profile?.children[index];
+      return {
+        name:
+          child['name'].trim() ||
+          previousChild?.name ||
+          profileChild?.name ||
+          '',
+        age:
+          child['age'] ??
+          previousChild?.age ??
+          profileChild?.age ??
+          null,
+      };
+    });
+    const latestStoredText = (
+      profileValue: string | undefined,
+      updateValue: string | undefined,
+    ): string => {
+      const updateIsNewer =
+        !!previousUpdate &&
+        (!profile || previousUpdate.createdAt >= profile.createdAt);
+      return updateIsNewer
+        ? updateValue?.trim() || profileValue?.trim() || ''
+        : profileValue?.trim() || updateValue?.trim() || '';
+    };
+    const mergedEmail =
+      email ||
+      latestStoredText(profile?.email, previousUpdate?.email) ||
+      directoryMember?.email ||
+      '';
+    const mergedAddress = address || latestStoredText(
+      profile?.address,
+      previousUpdate?.address,
+    );
     const isValidAge = (age: unknown): age is number =>
       typeof age === 'number' && Number.isInteger(age) && age >= 0 && age <= 120;
     const familyDetailsValid =
@@ -1935,9 +2072,8 @@ app.post('/api/contact-details-updates', async (req, res, next) => {
       !name ||
       name.length > 500 ||
       !nameMatchesMembership ||
-      !validEmail ||
+      (email && !validEmail) ||
       email.length > 254 ||
-      !address ||
       address.length > 500 ||
       !phoneMatchesMembership ||
       value['membershipType'] !== membershipType ||
@@ -1957,8 +2093,8 @@ app.post('/api/contact-details-updates', async (req, res, next) => {
       membershipNumber,
       membershipType,
       name,
-      email,
-      address,
+      email: mergedEmail,
+      address: mergedAddress,
       spouseName,
       spouseAge,
       spousePhone,
@@ -2127,26 +2263,42 @@ app.get('/api/admin/registrations', adminAuthentication, async (_req, res, next)
 app.get('/api/admin/members', adminAuthentication, async (_req, res, next) => {
   try {
     const encryptionKey = getEncryptionKey();
+    const hasStorage = Boolean(encryptionKey && hasPersistentStorageConfigured());
     const profiles =
-      encryptionKey && hasPersistentStorageConfigured()
+      hasStorage && encryptionKey
         ? await getMembershipDirectoryProfiles(encryptionKey)
         : new Map<string, MembershipRenewal>();
-    const members = Object.entries(membershipDirectory)
-      .sort(([left], [right]) => Number(left) - Number(right))
-      .map(([membershipNumber, member]) => {
+    const contactUpdates = hasStorage && encryptionKey
+      ? await getContactDetailsUpdates(encryptionKey)
+      : [];
+    const membershipNumbers = new Set([
+      ...Object.keys(membershipDirectory),
+      ...Object.keys(membershipFamilyDirectory),
+      ...profiles.keys(),
+      ...contactUpdates.map((update) =>
+        update.membershipNumber.trim().replace(/^0+(?=\d)/, ''),
+      ),
+    ]);
+    const members = [...membershipNumbers]
+      .sort((left, right) => Number(left) - Number(right))
+      .map((membershipNumber) => {
+        const member = membershipDirectory[membershipNumber];
         const profile = profiles.get(membershipNumber);
-        const names = profile?.spouseName
-          ? [...member.names, profile.spouseName]
-          : [...getMembershipNames(membershipNumber, member.names)];
-        for (const child of profile?.children ?? []) {
-          if (child.name && !names.includes(child.name)) {
-            names.push(child.name);
-          }
-        }
+        const names = getMembershipNames(
+          membershipNumber,
+          [
+            ...(member?.names ?? []),
+            ...(profile?.membershipHolderName ? [profile.membershipHolderName] : []),
+          ],
+          profile?.membershipType === 'family' ? profile.spouseName : undefined,
+          profile?.membershipType === 'family'
+            ? profile.children.map((child) => child.name)
+            : [],
+        );
 
         const directoryPhones = getMembershipPhoneNumbers(
           membershipNumber,
-          member.phone,
+          member?.phone,
         );
         const phones = profile
           ? [
@@ -2160,20 +2312,26 @@ app.get('/api/admin/members', adminAuthentication, async (_req, res, next) => {
           membershipNumber,
           names,
           phones,
-          email: profile?.email || member.email || '',
+          email: profile?.email || member?.email || '',
           address: [profile?.address, profile?.postcode].filter(Boolean).join(', '),
           addressUpdatedAt: profile?.createdAt ?? '',
           renewalDetails: profile
             ? {
                 membershipType: profile.membershipType,
-                memberAge: profile.memberAge,
+              membershipHolderName: profile.membershipHolderName,
+              mobileNumber: profile.mobileNumber ?? '',
+              email: profile.email,
+              address: profile.address,
+              memberAge: profile.memberAge,
                 spouseName: profile.spouseName,
                 spouseAge: profile.spouseAge,
                 children: profile.children,
                 otherFamilyMembers: profile.otherFamilyMembers,
                 postcode: profile.postcode,
+                phone: profile.phone,
                 spousePhone: profile.spousePhone,
                 additionalPhones: profile.additionalPhones,
+                consent: profile.consent,
               }
             : null,
         };

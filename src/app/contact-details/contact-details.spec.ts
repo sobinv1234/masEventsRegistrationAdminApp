@@ -20,6 +20,12 @@ describe('ContactDetailsForm', () => {
               membershipNumber: '239',
               names: ['Abymon Jacob', 'Jayamole Aby'],
               membershipType: 'family',
+              email: 'member@example.com',
+              address: '1 Example Road',
+              spouseName: 'Jayamole Aby',
+              spouseAge: 34,
+              spousePhone: '07123456789',
+              children: [{ name: 'Child One', age: 8 }],
             }],
           }),
           { status: 200 },
@@ -34,7 +40,12 @@ describe('ContactDetailsForm', () => {
 
     expect(form['membershipNumber']).toBe('239');
     expect(form['name']).toBe('Abymon Jacob, Jayamole Aby');
-    expect(form['email']).toBe('');
+    expect(form['email']).toBe('member@example.com');
+    expect(form['address']).toBe('1 Example Road');
+    expect(form['spouseName']).toBe('Jayamole Aby');
+    expect(form['spouseAge']).toBe(34);
+    expect(form['spousePhone']).toBe('07123456789');
+    expect(form['children'][0]).toEqual({ name: 'Child One', age: 8 });
   });
 
   it('keeps the directory-provided full name field disabled', async () => {

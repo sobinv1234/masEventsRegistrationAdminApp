@@ -362,7 +362,13 @@ describe('Registration', () => {
         if (String(input) === '/api/membership-phone-lookup') {
           return new Response(
             JSON.stringify({
-              matches: [{ membershipNumber: '20', names: ['Biju Abraham'] }],
+              matches: [{
+                membershipNumber: '20',
+                names: ['Biju Abraham'],
+                membershipHolderName: 'Biju Abraham',
+                memberAge: 46,
+                email: 'biju@example.com',
+              }],
             }),
             { status: 200, headers: { 'Content-Type': 'application/json' } },
           );
@@ -383,6 +389,32 @@ describe('Registration', () => {
     expect(registration['membershipNumber']).toBe('20');
     expect(registration['name']).toBe('Biju Abraham');
     expect(registration['membershipNumberValid']).toBeTrue();
+    expect(registration['age']).toBe(46);
+    expect(registration['email']).toBe('biju@example.com');
+  });
+
+  it('prompts to renew when phone lookup finds no member or renewal record', async () => {
+    const fixture = TestBed.createComponent(Registration);
+    const registration = fixture.componentInstance;
+    registration['phone'] = '07123456789';
+    spyOn(globalThis, 'fetch').and.resolveTo(
+      new Response(
+        JSON.stringify({ message: 'No member found for that mobile number.' }),
+        { status: 404, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    await registration['lookupMembershipByPhone']();
+    fixture.detectChanges();
+
+    expect(registration['membershipStatus']).toBe('renewal');
+    expect(registration['phoneLookupNeedsRenewal']).toBeTrue();
+    expect(fixture.nativeElement.textContent).toContain(
+      'Go to membership renewal',
+    );
+    expect(fixture.nativeElement.textContent).toContain(
+      'Please renew your membership to continue',
+    );
   });
 
   it('normalizes UK mobile numbers with 0, +44, or no country prefix equally', () => {

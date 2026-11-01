@@ -164,12 +164,13 @@
             <div class="child-row">
               <label class="field">
                 Child {{ index + 1 }} — Name
-                <input [name]="'childName' + index" [(ngModel)]="child.name" maxlength="120" />
+                <input [name]="'childName' + index" [attr.name]="'childName' + index" [(ngModel)]="child.name" maxlength="120" />
               </label>
               <label class="field">
                 Age
                 <input
                   [name]="'childAge' + index"
+                  [attr.name]="'childAge' + index"
                   type="number"
                   min="0"
                   max="120"
